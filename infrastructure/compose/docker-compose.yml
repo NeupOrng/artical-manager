@@ -1,0 +1,352 @@
+# Local/VPS stack for core-engine.
+#
+# Datastores, the two core-engine apps, Kong, and the Ory stack.
+#
+# Kratos and Oathkeeper are in the login path. Hydra and Keto run and are
+# migrated, but nothing routes through them yet — see ory/hydra/README.md and
+# ory/keto/README.md for what would have to be true to change that.
+#
+# LOCAL DEVIATION FROM PRODUCTION: several services publish ports on 127.0.0.1
+# for direct debugging, and the API is exposed on :3000. In production Kong is
+# the only container with published ports. See infrastructure/CLAUDE.md.
+
+name: artical
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Creates the kratos/hydra/keto databases. Runs ONCE, on an empty data
+      # directory only — if you add a service here later, create its database by
+      # hand or `task reset` the volume.
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # AOF on: Redis holds BullMQ job timers. This is the second line of defence
+    # only — Postgres is the source of truth and the worker reconciles on boot.
+    # See core-engine/docs/scheduling-and-jobs.md.
+    command: redis-server --appendonly yes --appendfsync everysec
+    volumes:
+      - redis-data:/data
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    ports:
+      - '${MINIO_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Creates the media bucket and makes it publicly readable.
+  # og:image must be fetchable by Facebook's crawler with no auth — see
+  # core-engine/docs/media-and-uploads.md.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
+      mc mb --ignore-existing local/$$MINIO_BUCKET &&
+      mc anonymous set download local/$$MINIO_BUCKET &&
+      echo 'bucket ready'
+      "
+    restart: 'no'
+
+  api:
+    build:
+      context: ../../core-engine
+      dockerfile: Dockerfile
+      args:
+        APP: api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: ${MEDIA_PUBLIC_BASE_URL:-http://localhost:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL:-http://localhost:9000}
+    ports:
+      - '${API_PORT:-3000}:3000'
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  worker:
+    build:
+      context: ../../core-engine
+      dockerfile: Dockerfile
+      args:
+        APP: worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_POOL_MAX: 5
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: ${MEDIA_PUBLIC_BASE_URL:-http://localhost:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL:-http://localhost:9000}
+
+  # ---------------------------------------------------------------------------
+  # Ory stack.
+  #
+  # Image tags are pinned. If a pull fails, the tag is wrong for your registry —
+  # that fails loudly at `task up` rather than silently at runtime, which is the
+  # intended tradeoff.
+  # ---------------------------------------------------------------------------
+
+  # Dev SMTP catcher for recovery/verification mail. NEVER deploy this — it
+  # accepts any credentials and exposes every message it receives in a web UI.
+  mailslurper:
+    image: oryd/mailslurper:latest-smtps
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:${MAILSLURPER_UI_PORT:-4436}:4436'
+      - '127.0.0.1:${MAILSLURPER_API_PORT:-4437}:4437'
+
+  kratos-migrate:
+    image: oryd/kratos:v1.3.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/kratos?sslmode=disable
+    command: migrate sql -e --yes
+    restart: 'no'
+
+  kratos:
+    image: oryd/kratos:v1.3.1
+    restart: unless-stopped
+    depends_on:
+      kratos-migrate:
+        condition: service_completed_successfully
+    environment:
+      # Kratos does no ${VAR} substitution inside kratos.yml, so the values that
+      # must not be committed are supplied here using its own env-override
+      # naming (nested keys uppercased, joined by underscore).
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/kratos?sslmode=disable
+      SECRETS_COOKIE: ${KRATOS_COOKIE_SECRET}
+      SECRETS_CIPHER: ${KRATOS_CIPHER_SECRET}
+      COURIER_SMTP_CONNECTION_URI: smtps://test:test@mailslurper:1025/?skip_ssl_verify=true&legacy_ssl=true
+    command: serve --config /etc/config/kratos/kratos.yml --watch-courier
+    volumes:
+      - ../ory/kratos:/etc/config/kratos:ro
+    ports:
+      # Loopback only, and only so the backoffice can run on the host during
+      # development. In production nothing reaches Kratos except through Kong.
+      - '127.0.0.1:${KRATOS_PUBLIC_PORT:-4433}:4433'
+      # Admin API: creates identities and impersonates anyone. Loopback, always.
+      - '127.0.0.1:${KRATOS_ADMIN_PORT:-4434}:4434'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:4434/admin/health/ready']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # The identity decision point. Kong forwards /admin/v1/* here; this validates
+  # the Kratos session and sets X-Kratos-Identity-Id before the API sees it.
+  oathkeeper:
+    image: oryd/oathkeeper:v0.40.7
+    restart: unless-stopped
+    depends_on:
+      kratos:
+        condition: service_healthy
+    command: serve --config /etc/config/oathkeeper/oathkeeper.yml
+    volumes:
+      - ../ory/oathkeeper:/etc/config/oathkeeper:ro
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:4456/health/ready']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  hydra-migrate:
+    image: oryd/hydra:v2.2.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/hydra?sslmode=disable
+    command: migrate sql -e --yes
+    restart: 'no'
+
+  # Running and migrated, but NOT in the login path — the backoffice logs in with
+  # a first-party Kratos session. This exists so that adding a non-browser API
+  # client later is an Oathkeeper authenticator swap rather than a new service.
+  # See ory/hydra/README.md.
+  hydra:
+    image: oryd/hydra:v2.2.0
+    restart: unless-stopped
+    depends_on:
+      hydra-migrate:
+        condition: service_completed_successfully
+    environment:
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/hydra?sslmode=disable
+      SECRETS_SYSTEM: ${HYDRA_SYSTEM_SECRET}
+    command: serve all --config /etc/config/hydra/hydra.yml --dev
+    volumes:
+      - ../ory/hydra:/etc/config/hydra:ro
+    ports:
+      - '127.0.0.1:${HYDRA_PUBLIC_PORT:-4444}:4444'
+      - '127.0.0.1:${HYDRA_ADMIN_PORT:-4445}:4445'
+
+  keto-migrate:
+    image: oryd/keto:v0.12.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/keto?sslmode=disable
+    command: migrate up --yes --config /etc/config/keto/keto.yml
+    volumes:
+      - ../ory/keto:/etc/config/keto:ro
+    restart: 'no'
+
+  # Running and migrated, but NOT the permission authority — RoleGuard in NestJS
+  # reads authors.role. See ory/keto/README.md for the switch criteria.
+  keto:
+    image: oryd/keto:v0.12.0
+    restart: unless-stopped
+    depends_on:
+      keto-migrate:
+        condition: service_completed_successfully
+    environment:
+      DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/keto?sslmode=disable
+    command: serve --config /etc/config/keto/keto.yml
+    volumes:
+      - ../ory/keto:/etc/config/keto:ro
+    ports:
+      - '127.0.0.1:${KETO_READ_PORT:-4466}:4466'
+      # Write API: anything reaching this can grant itself any permission.
+      - '127.0.0.1:${KETO_WRITE_PORT:-4467}:4467'
+
+  # Resolves ${VAR} placeholders in kong.template.yml into the real config.
+  # Kong's own vault references don't work for credential keys, so substitution
+  # happens here instead of keeping secrets in git.
+  kong-config:
+    image: alpine:3.20
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      TECH_TENANT_KEY: ${TECH_TENANT_KEY}
+      GAMING_TENANT_KEY: ${GAMING_TENANT_KEY}
+    volumes:
+      - ../kong/kong.template.yml:/template/kong.template.yml:ro
+      - kong-config:/out
+    command: >
+      sh -c "
+      apk add --no-cache gettext >/dev/null &&
+      envsubst '$$TECH_TENANT_KEY $$GAMING_TENANT_KEY' < /template/kong.template.yml > /out/kong.yml &&
+      echo 'kong config rendered'
+      "
+    restart: 'no'
+
+  # Gateway. In production this is the ONLY container with published ports;
+  # locally the API is also exposed on :3000 for direct debugging.
+  kong:
+    image: kong:3.9
+    restart: unless-stopped
+    depends_on:
+      kong-config:
+        condition: service_completed_successfully
+      # Kong proxies /admin/v1 to Oathkeeper. Starting before it is ready means
+      # the admin surface 502s for the first few seconds after boot.
+      oathkeeper:
+        condition: service_healthy
+    environment:
+      KONG_DATABASE: 'off'
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_LOG_LEVEL: notice
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      # Read by the env vault references in kong.yml
+    volumes:
+      - kong-config:/kong:ro
+    ports:
+      - '${KONG_PROXY_PORT:-8000}:8000'
+      # Admin API bound to loopback only — never expose this publicly.
+      - '127.0.0.1:${KONG_ADMIN_PORT:-8001}:8001'
+    healthcheck:
+      test: ['CMD', 'kong', 'health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  kong-config:
+  postgres-data:
+  redis-data:
+  minio-data:

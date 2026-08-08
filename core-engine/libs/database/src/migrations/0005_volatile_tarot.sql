@@ -1,0 +1,2 @@
+ALTER TABLE "authors" ADD COLUMN "avatar_media_id" uuid;--> statement-breakpoint
+ALTER TABLE "authors" ADD CONSTRAINT "authors_avatar_media_id_media_id_fk" FOREIGN KEY ("avatar_media_id") REFERENCES "public"."media"("id") ON DELETE set null ON UPDATE no action;

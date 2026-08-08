@@ -1,0 +1,19 @@
+vars {
+  gatewayUrl: http://localhost:8000
+  publicBase: {{gatewayUrl}}/public/v1
+  adminBase: {{gatewayUrl}}/admin/v1
+  kratosPublicUrl: http://localhost:4433
+  sharedSlug: shared-slug-across-tenants
+  draftSlug: a-draft-nobody-should-see
+  techAuthor: mara-okonkwo
+  gamingAuthor: devin-hartley
+  // Fill these from a list response before running the article requests.
+  articleId: 
+  otherTenantArticleId: 
+}
+
+vars:secret [
+  techTenantKey,
+  gamingTenantKey,
+  sessionCookie
+]

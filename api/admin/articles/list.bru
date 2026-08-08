@@ -1,0 +1,16 @@
+meta { name: List articles, type: http, seq: 1 }
+
+get { url: {{adminBase}}/articles?perPage=20, body: none, auth: none }
+
+headers { Cookie: {{sessionCookie}} }
+
+docs {
+  Any status — this is the admin surface. Ordered by updatedAt descending
+  ("what has been worked on"), not by publish date.
+
+  Query: page, perPage (capped 100), status, authorId, search.
+
+  Each row carries `missingToPublish`. Empty means ready to publish; the array
+  names what is still absent. It comes from the aggregate, so the list badge and
+  the 422 from /publish can never disagree.
+}

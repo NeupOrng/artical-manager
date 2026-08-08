@@ -1,0 +1,195 @@
+# Kong declarative config (DB-less).
+#
+# This is a TEMPLATE. The kong-config init container substitutes ${VAR}
+# placeholders from the environment and writes the resolved kong.yml into a
+# shared volume, which Kong then loads.
+#
+# Why not Kong's own `{vault://env/...}` references: those resolve only for
+# plugin config fields marked referenceable. `keyauth_credentials.key` is not
+# one, so Kong stores the literal string and every request 401s. Verified the
+# hard way — see infrastructure/CLAUDE.md.
+#
+# Everything here is committed; the keys are not.
+#
+# See infrastructure/CLAUDE.md.
+
+_format_version: '3.0'
+_transform: true
+
+services:
+  # ---------------------------------------------------------------------------
+  # Public read API. Unauthenticated by user — readers are anonymous. The only
+  # credential is the tenant's key, which proves the caller is one of our own
+  # deployed sites.
+  # ---------------------------------------------------------------------------
+  - name: public-api
+    url: http://api:3000
+    routes:
+      - name: public-v1
+        paths:
+          - /public/v1
+        strip_path: false
+        methods: [GET, HEAD, OPTIONS]
+    plugins:
+      # Validates X-Tenant-Key and, on success, sets X-Consumer-Custom-ID on the
+      # upstream request. NestJS resolves the tenant from that header.
+      #
+      # Kong overwrites X-Consumer-* rather than appending, so a client sending
+      # a forged X-Consumer-Custom-ID cannot have it survive. That is verified
+      # by a test, not assumed — see api/public/forged-consumer-header.bru.
+      - name: key-auth
+        config:
+          key_names: ['X-Tenant-Key']
+          key_in_header: true
+          key_in_query: false
+          key_in_body: false
+          # Don't forward the key upstream — NestJS has no use for it and it
+          # would end up in application logs.
+          hide_credentials: true
+
+      # Scoped per consumer, so one site's traffic can't degrade the other's.
+      - name: rate-limiting
+        config:
+          minute: 300
+          hour: 10000
+          policy: local
+          limit_by: consumer
+          fault_tolerant: true
+
+      # Public handlers must never see an identity header. This route bypasses
+      # Oathkeeper entirely, so without this a client could simply send one.
+      #
+      # Removing ONLY the Kratos header is what makes this safe here. The
+      # priority warning in infrastructure/CLAUDE.md applies to removing
+      # X-Consumer-*: request-transformer (801) runs after key-auth (1250) and
+      # would delete the consumer headers key-auth just set, breaking tenant
+      # resolution. Do not add X-Consumer-* to this list.
+      - name: request-transformer
+        config:
+          remove:
+            headers:
+              - X-Kratos-Identity-Id
+
+      # Public reads are cacheable and identical for every reader of a tenant.
+      # This is what keeps the VPS quiet under load.
+      - name: proxy-cache
+        config:
+          response_code: [200]
+          request_method: [GET, HEAD]
+          content_type: ['application/json', 'application/json; charset=utf-8']
+          cache_ttl: 60
+          strategy: memory
+          # Vary by consumer, or tenant A would be served tenant B's cached body.
+          vary_headers: ['X-Consumer-Custom-ID']
+
+  # ---------------------------------------------------------------------------
+  # Admin surface. A SEPARATE service, not another route on public-api —
+  # plugins attach at the service level, so sharing one would apply
+  # proxy-cache to admin responses. That bites immediately: polling an
+  # upload's processing status returns a cached `pending` for the full TTL
+  # while the row is already `ready`. Admin reads must never be cached.
+  #
+  # Upstream is OATHKEEPER, not the API. Oathkeeper validates the Kratos session
+  # and sets X-Kratos-Identity-Id, then forwards to api:3000. Nothing on this
+  # path reaches NestJS unauthenticated.
+  #
+  # The interim key-auth is gone: a tenant's public read key must not also be an
+  # admin credential. Root CLAUDE.md §5.
+  # ---------------------------------------------------------------------------
+  - name: admin-api
+    url: http://oathkeeper:4455
+    routes:
+      - name: admin-v1
+        paths:
+          - /admin/v1
+        strip_path: false
+        methods: [GET, POST, PATCH, PUT, DELETE, OPTIONS]
+    plugins:
+      # LOAD-BEARING, not defensive. If a client can send X-Kratos-Identity-Id
+      # and have it survive to NestJS, that is full impersonation of any author
+      # in any tenant. This removes the client's copy; Oathkeeper sets the real
+      # one downstream of here.
+      #
+      # Safe despite the priority note in infrastructure/CLAUDE.md: that warning
+      # is about request-transformer (priority 801) running AFTER key-auth (1250)
+      # and deleting the X-Consumer-* headers key-auth just set. This service has
+      # no key-auth and removes only the Kratos header, never X-Consumer-*.
+      - name: request-transformer
+        config:
+          remove:
+            headers:
+              - X-Kratos-Identity-Id
+
+      # Limited by IP, not consumer: there are no Kong consumers on this route
+      # any more. `limit_by: consumer` with no consumer silently falls back to
+      # counting every admin request in one global bucket.
+      - name: rate-limiting
+        config:
+          minute: 600
+          policy: local
+          limit_by: ip
+          fault_tolerant: true
+      # No proxy-cache here, deliberately.
+
+  # ---------------------------------------------------------------------------
+  # Kratos public API, proxied so the backoffice can reach self-service flows
+  # over the internet — it runs on a managed host and has no private network to
+  # the VPS.
+  #
+  # Only the PUBLIC API (4433) is exposed. Kratos' admin API on 4434 creates
+  # identities and must never be routable from outside; it has no service here
+  # and must not get one.
+  #
+  # strip_path: Kratos expects /self-service/..., the browser sends
+  # /.ory/self-service/... because that is the path the backoffice proxies under
+  # and therefore what serve.public.base_url advertises.
+  # ---------------------------------------------------------------------------
+  - name: kratos-public
+    url: http://kratos:4433
+    routes:
+      - name: kratos-public
+        paths:
+          - /.ory
+        strip_path: true
+        methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD]
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 120
+          policy: local
+          limit_by: ip
+          fault_tolerant: true
+
+  # ---------------------------------------------------------------------------
+  # Health, unauthenticated. Used by Uptime Kuma from outside.
+  # ---------------------------------------------------------------------------
+  - name: health-api
+    url: http://api:3000
+    routes:
+      - name: health
+        paths:
+          - /health
+        strip_path: false
+        methods: [GET, HEAD]
+
+# -----------------------------------------------------------------------------
+# One consumer per tenant. custom_id IS the tenant's UUID from the tenants
+# table — that's what makes tenancy resolvable with no extra lookup or schema
+# column. Keep these in sync with libs/database/src/seed/index.ts.
+# -----------------------------------------------------------------------------
+consumers:
+  - username: technology-site
+    custom_id: 0198f000-0000-7000-8000-000000000001
+    keyauth_credentials:
+      - key: "${TECH_TENANT_KEY}"
+
+  - username: gaming-site
+    custom_id: 0198f000-0000-7000-8000-000000000002
+    keyauth_credentials:
+      - key: "${GAMING_TENANT_KEY}"
+
+# NOTE: no `acme` plugin here — local development is plain HTTP. When this
+# reaches the VPS, add acme for the tenant custom domains and point its storage
+# at Redis: in DB-less mode the default `kong` storage is unavailable and `shm`
+# does not survive a restart, so certificates would vanish on the first
+# container restart after renewal.

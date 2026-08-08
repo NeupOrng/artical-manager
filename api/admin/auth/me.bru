@@ -1,0 +1,21 @@
+meta { name: Current principal, type: http, seq: 1 }
+
+get { url: {{adminBase}}/me, body: none, auth: none }
+
+headers { Cookie: {{sessionCookie}} }
+
+docs {
+  Resolves the edge-validated Kratos session to a principal.
+
+  Two shapes, discriminated on `kind`:
+
+    author         → has tenantId and role
+    platform-admin → both are null, by design; they have no tenant
+
+  Set `sessionCookie` by logging in at http://localhost:3001 and copying the
+  ory_kratos_session cookie, or drive the Kratos flow from this collection.
+
+  A 403 here means the identity is valid but not provisioned as an author or
+  platform admin — that is a real state, not a bug. See
+  core-engine/docs/api-reference.md.
+}

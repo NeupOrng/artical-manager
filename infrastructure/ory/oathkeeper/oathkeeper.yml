@@ -1,0 +1,108 @@
+# Ory Oathkeeper — the identity decision point.
+#
+# Oathkeeper answers exactly one question: "who is this?" It validates the Kratos
+# session and sets X-Kratos-Identity-Id on the upstream request. It does NOT
+# answer "may they do this" — roles are checked in NestJS against the live
+# `authors` / `platform_admins` row, so a role change or a deactivation takes
+# effect on the next request rather than whenever a token expires.
+# See core-engine/docs/auth-request-flow.md.
+#
+# Runs in proxy mode: Kong forwards /admin/v1/* here, and this forwards to the
+# API. Nothing reaches NestJS on that path without passing through.
+
+log:
+  level: info
+  format: json
+
+serve:
+  proxy:
+    port: 4455
+    timeout:
+      read: 30s
+      write: 30s
+      idle: 60s
+  api:
+    port: 4456
+
+access_rules:
+  matching_strategy: regexp
+  repositories:
+    - file:///etc/config/oathkeeper/access-rules.yml
+
+errors:
+  fallback:
+    - json
+  handlers:
+    json:
+      enabled: true
+      config:
+        verbose: false
+    redirect:
+      enabled: true
+      config:
+        to: http://localhost:3001/auth/login
+        when:
+          - error: [unauthorized, forbidden]
+            request:
+              header:
+                accept: [text/html]
+
+authenticators:
+  # The only authenticator in the login path. Calls Kratos to validate the
+  # session cookie the browser sent; an invalid or expired session is rejected
+  # here and never reaches NestJS.
+  cookie_session:
+    enabled: true
+    config:
+      check_session_url: http://kratos:4433/sessions/whoami
+      preserve_path: true
+      preserve_query: false
+      subject_from: identity.id
+      extra_from: "@this"
+      # Only this cookie triggers a check. Without the restriction, any request
+      # carrying any cookie causes a round trip to Kratos.
+      only:
+        - ory_kratos_session
+
+  # Deployed but NOT in the login path — this is the Hydra swap point.
+  #
+  # When a non-browser API client appears, enable this and change the
+  # authenticator on the admin rule from cookie_session to oauth2_introspection.
+  # NestJS does not change: it still reads one header. That is the entire reason
+  # Hydra was deferred rather than designed around.
+  oauth2_introspection:
+    enabled: false
+    config:
+      introspection_url: http://hydra:4445/admin/oauth2/introspect
+      scope_strategy: exact
+
+  # Required so a rule can explicitly declare "no credential expected" rather
+  # than falling through to whatever happens to be enabled.
+  noop:
+    enabled: true
+
+  anonymous:
+    enabled: true
+    config:
+      subject: anonymous
+
+authorizers:
+  # Oathkeeper allows anything that authenticated; NestJS decides what they may
+  # do. Keto is deployed but is not the authority yet — permissions today are
+  # "tenant_id matches" plus three static roles, which is a guard, not a relation
+  # graph. See infrastructure/ory/keto/README.md.
+  allow:
+    enabled: true
+  deny:
+    enabled: true
+
+mutators:
+  # Sets the one header NestJS trusts.
+  header:
+    enabled: true
+    config:
+      headers:
+        X-Kratos-Identity-Id: "{{ print .Subject }}"
+
+  noop:
+    enabled: true

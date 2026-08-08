@@ -1,0 +1,52 @@
+# Oathkeeper access rules.
+#
+# Only the admin surface passes through Oathkeeper. Public reads (/public/v1/*)
+# are handled by Kong alone and have no rule here on purpose — those handlers must
+# never see X-Kratos-Identity-Id at all.
+#
+# The `url` field matches what Oathkeeper receives from Kong, which is the
+# original path against Oathkeeper's own host:port.
+
+# -----------------------------------------------------------------------------
+# Admin API. Requires a valid Kratos session; injects the identity id.
+# -----------------------------------------------------------------------------
+- id: admin-api
+  match:
+    url: "http://<[^/]+>/admin/v1/<.*>"
+    methods:
+      - GET
+      - POST
+      - PATCH
+      - PUT
+      - DELETE
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    # NestJS decides what an authenticated principal may do. See oathkeeper.yml.
+    handler: allow
+  mutators:
+    - handler: header
+  upstream:
+    url: http://api:3000
+
+# -----------------------------------------------------------------------------
+# CORS preflight. Split out with `noop` because a browser sends OPTIONS without
+# credentials — folding it into the rule above would make every preflight 401 and
+# the failure presents as an unexplained CORS error rather than an auth one.
+#
+# The mutator is deliberately absent: nothing downstream should read an identity
+# off a preflight.
+# -----------------------------------------------------------------------------
+- id: admin-api-preflight
+  match:
+    url: "http://<[^/]+>/admin/v1/<.*>"
+    methods:
+      - OPTIONS
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+  upstream:
+    url: http://api:3000

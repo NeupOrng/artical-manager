@@ -1,0 +1,23 @@
+meta { name: Refusal — forged identity header, type: http, seq: 3 }
+
+get { url: {{adminBase}}/me, body: none, auth: none }
+
+headers { X-Kratos-Identity-Id: 2dae1995-6157-4e70-9497-fd472219aa59 }
+
+docs {
+  No session, but a forged X-Kratos-Identity-Id naming a real identity.
+
+  Expect 401. Kong strips inbound X-Kratos-Identity-Id before Oathkeeper sets
+  the real one, so a client-supplied value must never survive to NestJS.
+
+  THIS IS THE MOST IMPORTANT REQUEST IN THE COLLECTION. NestJS trusts that
+  header absolutely — it is the entire authentication result. Sending the same
+  header directly to the API on :3000 returns 200 with that identity's full
+  principal, which is exactly why the strip is load-bearing rather than
+  defensive.
+
+  A 200 here is full impersonation of any author in any tenant.
+
+  Note this is the ONE legitimate use of this header in the collection: as a
+  refusal test. Never add it to make a request work — see api/CLAUDE.md.
+}

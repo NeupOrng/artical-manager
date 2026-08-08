@@ -1,0 +1,294 @@
+version: '3'
+
+# Entry point for the whole repo. `task` with no argument lists everything.
+#
+# Scope today: core-engine + datastores + Kong + the Ory stack + the backoffice.
+# The two tenant sites run from a compose override; the backoffice runs on the
+# host, because it needs to reach Kratos on localhost the same way a browser does.
+
+vars:
+  # Production-shaped: core-engine only, exactly what ships to the VPS.
+  COMPOSE: docker compose --env-file infrastructure/env/.env -f infrastructure/compose/docker-compose.yml
+  # Everything, including the tenant sites. Local development only — the sites
+  # deploy to managed hosting, so they are in an override rather than the base
+  # file (see infrastructure/CLAUDE.md).
+  COMPOSE_DEV: >-
+    docker compose --env-file infrastructure/env/.env
+    -f infrastructure/compose/docker-compose.yml
+    -f infrastructure/compose/docker-compose.sites.yml
+  CORE: core-engine
+  BACKOFFICE: backoffice
+
+dotenv: ['infrastructure/env/.env']
+
+# Derived from the env file above — never hardcode credentials here, or the
+# host-side tooling silently drifts from what the containers actually use.
+env:
+  DATABASE_URL: postgres://{{.POSTGRES_USER}}:{{.POSTGRES_PASSWORD}}@localhost:{{.POSTGRES_PORT}}/{{.POSTGRES_DB}}
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  # --- setup ------------------------------------------------------------------
+
+  setup:
+    desc: First-time setup — create .env files and install dependencies
+    cmds:
+      - task: env
+      - task: install
+      - echo "Setup complete. Run 'task up' to start the stack."
+
+  env:
+    desc: Create env files from examples (never overwrites an existing one)
+    silent: true
+    cmds:
+      - cmd: |
+          if [ ! -f infrastructure/env/.env ]; then
+            cp infrastructure/env/.env.example infrastructure/env/.env
+            echo "created infrastructure/env/.env — review the passwords in it"
+          else
+            echo "infrastructure/env/.env already exists, leaving it alone"
+          fi
+      - cmd: |
+          if [ ! -f {{.CORE}}/.env ]; then
+            cp {{.CORE}}/.env.example {{.CORE}}/.env
+            echo "created {{.CORE}}/.env"
+          else
+            echo "{{.CORE}}/.env already exists, leaving it alone"
+          fi
+      - cmd: |
+          if [ ! -f {{.BACKOFFICE}}/.env ]; then
+            cp {{.BACKOFFICE}}/.env.example {{.BACKOFFICE}}/.env
+            echo "created {{.BACKOFFICE}}/.env"
+          else
+            echo "{{.BACKOFFICE}}/.env already exists, leaving it alone"
+          fi
+
+  install:
+    desc: Install core-engine and backoffice dependencies
+    cmds:
+      - cmd: pnpm install
+        dir: '{{.CORE}}'
+      - cmd: pnpm install
+        dir: '{{.BACKOFFICE}}'
+
+  # --- stack ------------------------------------------------------------------
+
+  dev:
+    desc: Start EVERYTHING — backend stack plus both tenant sites (one command)
+    deps: [env]
+    cmds:
+      - '{{.COMPOSE_DEV}} up -d --build'
+      - task: wait
+      - task: db:migrate
+      - task: db:seed
+      - task: db:seed:admin
+      - task: db:seed:authors
+      - echo ""
+      - echo "  Gateway         http://localhost:${KONG_PROXY_PORT:-8000}"
+      - echo "  API             http://localhost:${API_PORT:-3000}"
+      - echo "  Swagger         http://localhost:${API_PORT:-3000}/docs"
+      - echo "  MinIO           http://localhost:${MINIO_CONSOLE_PORT:-9001}"
+      - echo "  Mail (dev)      http://localhost:${MAILSLURPER_UI_PORT:-4436}"
+      - echo "  backoffice      http://localhost:3001"
+      - echo "  technology-site http://localhost:${TECH_SITE_PORT:-3100}"
+      - echo "  gaming-site     http://localhost:${GAMING_SITE_PORT:-3200}"
+      - echo ""
+      - 'echo "  sign in as ${SUPER_ADMIN_USERNAME} — password is in infrastructure/env/.env"'
+      - echo ""
+      - 'echo "  first run installs deps inside the containers and takes a few minutes"'
+      - 'echo "  logs -> task logs -- backoffice     stop -> task down"'
+
+  up:
+    desc: Start the backend stack only (production-shaped — no tenant sites)
+    deps: [env]
+    cmds:
+      - '{{.COMPOSE}} up -d --build'
+      - task: wait
+      - task: db:migrate
+      - task: db:seed
+      - echo ""
+      - echo "  Gateway  http://localhost:${KONG_PROXY_PORT:-8000}"
+      - echo "  API      http://localhost:${API_PORT:-3000}"
+      - echo "  Swagger  http://localhost:${API_PORT:-3000}/docs"
+
+  up:infra:
+    desc: Start datastores only (Postgres, Redis, MinIO) — for running apps locally
+    deps: [env]
+    cmds:
+      - '{{.COMPOSE}} up -d postgres redis minio minio-init'
+      - task: wait
+
+  down:
+    desc: Stop everything, sites included (volumes preserved)
+    cmds:
+      - '{{.COMPOSE_DEV}} down'
+
+  reset:
+    desc: Stop the stack and DELETE all data volumes
+    prompt: This deletes Postgres, Redis, and MinIO data. Continue?
+    cmds:
+      - '{{.COMPOSE_DEV}} down -v'
+
+  wait:
+    desc: Wait for datastores to report healthy
+    internal: true
+    cmds:
+      - cmd: |
+          echo "waiting for datastores..."
+          for i in $(seq 1 60); do
+            unhealthy=$({{.COMPOSE}} ps --format json \
+              | grep -c '"Health":"starting"' || true)
+            if [ "$unhealthy" = "0" ]; then echo "datastores ready"; exit 0; fi
+            sleep 2
+          done
+          echo "timed out waiting for datastores" >&2
+          exit 1
+
+  ps:
+    desc: Show status of everything, sites included
+    cmds:
+      - '{{.COMPOSE_DEV}} ps'
+
+  logs:
+    desc: 'Tail logs. Usage: task logs -- api'
+    cmds:
+      - '{{.COMPOSE_DEV}} logs -f --tail=100 {{.CLI_ARGS}}'
+
+  # --- database ---------------------------------------------------------------
+
+  db:generate:
+    desc: Generate a migration from schema changes (READ the SQL before committing)
+    dir: '{{.CORE}}'
+    cmds:
+      - pnpm run db:generate
+
+  db:migrate:
+    desc: Apply pending migrations
+    dir: '{{.CORE}}'
+    cmds:
+      - pnpm run db:migrate
+
+  db:seed:
+    desc: Seed development tenants, categories and articles
+    dir: '{{.CORE}}'
+    cmds:
+      - pnpm run db:seed
+
+  db:seed:admin:
+    desc: Create or repair the platform super admin (Kratos identity + DB row)
+    dir: '{{.CORE}}'
+    # Needs Kratos' ADMIN api, which is published on loopback only. Idempotent —
+    # re-running adopts an existing identity and reactivates a disabled account,
+    # so it is the documented recovery path for a locked-out super admin.
+    env:
+      KRATOS_ADMIN_URL: http://localhost:{{.KRATOS_ADMIN_PORT | default "4434"}}
+    cmds:
+      - pnpm run db:seed:admin
+
+  test:integration:
+    desc: Integration tests against the RUNNING stack, through the gateway
+    dir: '{{.CORE}}'
+    # Not part of `task check`: these need `task dev` up and a seeded database,
+    # and a check that fails with Docker closed is a check people learn to
+    # ignore. They exist because unit tests cannot see the gateway — the layer
+    # where this project's auth bugs actually live.
+    cmds:
+      - pnpm run test:integration
+
+  db:seed:authors:
+    desc: Give the seeded authors Kratos identities so they can log in (dev only)
+    dir: '{{.CORE}}'
+    # Separate from `db:seed` on purpose: that one is pure Postgres and works
+    # against `task up:infra` (datastores only). This needs Kratos, so folding
+    # them together would break the datastores-only workflow.
+    env:
+      KRATOS_ADMIN_URL: http://localhost:{{.KRATOS_ADMIN_PORT | default "4434"}}
+    cmds:
+      - pnpm run db:seed:authors
+
+  db:studio:
+    desc: Open Drizzle Studio
+    dir: '{{.CORE}}'
+    cmds:
+      - pnpm run db:studio
+
+  db:psql:
+    desc: Open a psql shell against the running Postgres
+    cmds:
+      - '{{.COMPOSE}} exec postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}'
+
+  # --- development ------------------------------------------------------------
+
+  dev:api:
+    desc: Run the API locally in watch mode (needs `task up:infra`)
+    dir: '{{.CORE}}'
+    cmds:
+      - pnpm run start:api
+
+  dev:worker:
+    desc: Run the worker locally in watch mode (needs `task up:infra`)
+    dir: '{{.CORE}}'
+    cmds:
+      - pnpm run start:worker
+
+  dev:backoffice:
+    desc: Run the backoffice on the HOST instead of in compose (needs `task up`)
+    dir: '{{.BACKOFFICE}}'
+    # `task dev` already runs the backoffice as a container on the same port, so
+    # this is the alternative for when you want host-side tooling — a debugger
+    # attached, or HMR without the Docker-on-macOS file-watching penalty.
+    #
+    # Do NOT run both: they bind the same port 3001, which is fixed because
+    # Kratos advertises it in serve.public.base_url.
+    #
+    # Reads backoffice/.env, which points at localhost rather than at Docker
+    # service names.
+    cmds:
+      - pnpm run dev
+
+  build:
+    desc: Build both core-engine apps
+    dir: '{{.CORE}}'
+    cmds:
+      - rm -rf dist
+      - pnpm run build:api
+      - pnpm run build:worker
+
+  # --- checks -----------------------------------------------------------------
+
+  check:
+    desc: Typecheck, lint, and test
+    cmds:
+      - task: typecheck
+      - task: lint
+      - task: test
+
+  typecheck:
+    desc: Typecheck core-engine
+    dir: '{{.CORE}}'
+    cmds:
+      - pnpm run typecheck
+
+  lint:
+    desc: Lint core-engine
+    dir: '{{.CORE}}'
+    cmds:
+      - pnpm run lint
+
+  test:
+    desc: Run core-engine tests
+    dir: '{{.CORE}}'
+    cmds:
+      - pnpm run test
+
+
+  health:
+    desc: Hit the API health endpoints
+    cmds:
+      - curl -fsS http://localhost:${API_PORT:-3000}/health/live && echo ""
+      - curl -fsS http://localhost:${API_PORT:-3000}/health/ready && echo ""

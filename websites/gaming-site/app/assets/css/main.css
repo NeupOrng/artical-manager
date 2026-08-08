@@ -1,0 +1,313 @@
+@import "tailwindcss";
+
+/*
+ * Faces, self-hosted from public/fonts. `swap` so text is readable during load
+ * rather than invisible — on a guide the reader is looking something up
+ * mid-game and cannot wait for a webfont.
+ */
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/worksans-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Work Sans';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/worksans-400-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/worksans-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/worksans-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/worksans-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Work Sans';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/worksans-700-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/worksans-800.woff2') format('woff2');
+}
+
+/*
+ * Gaming Site — modern gaming publication.
+ *
+ * This file is this site's ALONE. No shared preset or theme package with
+ * technology-site: the two must read as unrelated publications
+ * (websites/CLAUDE.md). That still holds — technology-site is a light bone
+ * ground with a certification blue and tabular figures; this is near-black,
+ * image-led and loud. Nothing is shared but the language they are written in.
+ *
+ * DIRECTION: the reference the user pinned is kotaku.com, adopted for its
+ * structure rather than its identity — dark neutral ground, one grotesque at
+ * heavy weights, title-case headlines set tight, a dense image-led grid, a
+ * timestamped rail for recency, and a coloured uppercase byline.
+ *
+ * The accent pair is deliberately NOT the reference's. It runs yellow plus
+ * magenta; taking a competitor's ground, typeface and both accents together is
+ * where "in the same register" becomes "indistinguishable from", which is a
+ * brand risk and not a style choice. Ours is volt (acid lime) for marks and
+ * interaction, ember (coral) for attribution and section labels.
+ *
+ * Disciplines:
+ *   1. Volt is for interaction and the site mark. Ember is for people and
+ *      sections. Neither is decorative; if a third accent appears, this stops
+ *      being a system.
+ *   2. Images carry the page. Type is the frame, not the subject.
+ *   3. Nothing glows. Dark ground, flat fills, hairline rules — no neon bloom,
+ *      no gradient text, no glass.
+ */
+
+@theme {
+  /* --- Ground -------------------------------------------------------- */
+  /* Dark from the use scene: read on a phone in a dark room beside a running
+     game at least as often as in daylight. */
+  --color-pitch: oklch(0.205 0 0);
+  --color-raise: oklch(0.269 0 0);
+  --color-hair: oklch(0.34 0 0);
+
+  /* --- Ink ----------------------------------------------------------- */
+  --color-paper: oklch(0.923 0 0);
+  --color-mute: oklch(0.715 0 0);
+  --color-dim: oklch(0.58 0 0);
+
+  /* --- Accents ------------------------------------------------------- */
+  /* Volt: the site mark and every interactive affordance. */
+  --color-volt: oklch(0.87 0.21 128);
+  --color-volt-deep: oklch(0.62 0.16 128);
+  /* Ember: bylines and section labels — the "who and what" colour. */
+  --color-ember: oklch(0.68 0.19 34);
+
+  /* --- Type ---------------------------------------------------------- */
+  /* One grotesque across the whole site, worked hard from 400 to 800. A second
+     display face would dilute it; the reference gets its voice from weight and
+     size, not from a type pairing. */
+  --font-sans: 'Work Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Small uppercase label — sections, bylines, timestamps. */
+@utility label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-pitch);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Headlines are set tight and title-case, the way the reference does. */
+  h1, h2, h3 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-volt);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-volt);
+    color: var(--color-pitch);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/*
+ * Article body.
+ *
+ * Single column at a real reading measure. The previous build set two justified
+ * columns; that belonged to the broadside world and is wrong here — a reader
+ * scanning a walkthrough on a phone should never have to travel back up the
+ * page to find the next step.
+ */
+@layer components {
+  .story {
+    max-width: 40rem;
+    font-size: 1.125rem;
+    line-height: 1.7;
+  }
+
+  .story > * + * {
+    margin-top: 1.4em;
+  }
+
+  .story h2 {
+    font-size: clamp(1.4rem, 1.15rem + 1.1vw, 1.75rem);
+    font-weight: 700;
+    line-height: 1.15;
+    margin-top: 2.2em;
+    margin-bottom: 0;
+  }
+
+  .story h2 + * {
+    margin-top: 0.6em;
+  }
+
+  .story h3 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-top: 1.9em;
+  }
+
+  .story h3 + * {
+    margin-top: 0.5em;
+  }
+
+  .story ul,
+  .story ol {
+    padding-left: 0;
+    list-style: none;
+    counter-reset: step;
+  }
+
+  .story li {
+    position: relative;
+    padding-left: 2.4rem;
+    margin-top: 0.75em;
+    line-height: 1.6;
+  }
+
+  /* Numbered steps get real emphasis: on a walkthrough the step number is the
+     thing the reader is hunting for. */
+  .story ol > li {
+    counter-increment: step;
+  }
+
+  .story ol > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0.15em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    background-color: var(--color-volt);
+    color: var(--color-pitch);
+  }
+
+  .story ul > li::before {
+    content: "";
+    position: absolute;
+    left: 0.3rem;
+    top: 0.72em;
+    width: 0.6rem;
+    height: 0.6rem;
+    background-color: var(--color-volt);
+  }
+
+  /*
+   * Pull quote. Deliberately NOT a thick coloured left bar — that device is the
+   * single most recognisable generated-UI tell, and the detector flags it. The
+   * emphasis comes from size and weight, which is what this register does
+   * anyway; the short rule above marks it without fencing it.
+   */
+  .story blockquote {
+    margin-top: 2.1em;
+    margin-bottom: 2.1em;
+    padding-top: 1.1rem;
+    font-size: 1.42rem;
+    font-weight: 700;
+    line-height: 1.28;
+    letter-spacing: -0.015em;
+    position: relative;
+  }
+
+  .story blockquote::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3.5rem;
+    height: 3px;
+    background-color: var(--color-ember);
+  }
+
+  .story hr {
+    border: 0;
+    margin: 2.2em 0;
+    border-top: 1px solid var(--color-hair);
+  }
+
+  .story a {
+    color: var(--color-volt);
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.18em;
+  }
+
+  .story a:hover {
+    background-color: var(--color-volt);
+    color: var(--color-pitch);
+    text-decoration-color: transparent;
+  }
+
+  .story strong {
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .story em {
+    font-style: italic;
+  }
+
+  .story code {
+    font-size: 0.92em;
+    background-color: var(--color-raise);
+    padding: 0.12em 0.36em;
+  }
+}

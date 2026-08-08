@@ -1,0 +1,7 @@
+meta { name: Refusal — draft must 404, type: http, seq: 4 }
+get { url: {{publicBase}}/articles/{{draftSlug}}, body: none, auth: none }
+headers { X-Tenant-Key: {{techTenantKey}} }
+docs {
+  Expect 404. The public surface can only ever return status = published.
+  A 200 here is a content leak.
+}

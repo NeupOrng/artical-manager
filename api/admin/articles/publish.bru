@@ -1,0 +1,18 @@
+meta { name: Publish, type: http, seq: 3 }
+
+post { url: {{adminBase}}/articles/{{articleId}}/publish, body: none, auth: none }
+
+headers { Cookie: {{sessionCookie}} }
+
+docs {
+  A verb on a sub-resource, never PATCH { status } — that keeps the transition's
+  guards explicit and stops a generic update becoming a way around the aggregate.
+
+  422 ARTICLE_MISSING_EXCERPT / ARTICLE_MISSING_COVER_IMAGE until both are set.
+  Both feed the share preview, which is the product's whole promise.
+
+  Idempotent: publishing twice does not move publishedAt. Unpublishing does not
+  clear it either — it is the canonical FIRST publication date.
+
+  Requires editor or admin. A contributor gets 403.
+}

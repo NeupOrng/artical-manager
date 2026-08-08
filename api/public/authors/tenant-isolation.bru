@@ -1,0 +1,10 @@
+meta { name: Isolation — other tenant's author, type: http, seq: 2 }
+get { url: {{publicBase}}/authors/{{gamingAuthor}}, body: none, auth: none }
+headers { X-Tenant-Key: {{techTenantKey}} }
+docs {
+  The GAMING tenant's author, requested with the TECHNOLOGY key.
+
+  Must be 404. Usernames are unique per tenant, not globally — a lookup by
+  username alone would find this row and appear to work indefinitely.
+  A 200 here means tenant scoping is broken.
+}

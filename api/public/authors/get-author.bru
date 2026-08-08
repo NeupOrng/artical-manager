@@ -1,0 +1,10 @@
+meta { name: Get author profile by username, type: http, seq: 1 }
+get { url: {{publicBase}}/authors/{{techAuthor}}, body: none, auth: none }
+headers { X-Tenant-Key: {{techTenantKey}} }
+docs {
+  Returns the author's public profile plus their published articles.
+
+  `email` and `telegram` are null unless that author set `contact_public`.
+  The redaction happens in the author domain (toPublicProfile), so it cannot
+  be bypassed by asking differently — there is no query parameter for it.
+}

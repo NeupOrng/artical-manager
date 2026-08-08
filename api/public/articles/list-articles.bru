@@ -1,0 +1,7 @@
+meta { name: List published articles, type: http, seq: 1 }
+get { url: {{publicBase}}/articles, body: none, auth: none }
+headers { X-Tenant-Key: {{techTenantKey}} }
+docs {
+  Published articles for the tenant the key maps to. Never returns drafts or
+  scheduled articles — enforced in SQL, not by a filter.
+}

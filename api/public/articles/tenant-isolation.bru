@@ -1,0 +1,8 @@
+meta { name: Isolation — same slug, other tenant, type: http, seq: 3 }
+get { url: {{publicBase}}/articles/{{sharedSlug}}, body: none, auth: none }
+headers { X-Tenant-Key: {{gamingTenantKey}} }
+docs {
+  Both tenants have an article at this slug. Slugs collide across tenants BY
+  DESIGN. This must return the GAMING article, never the technology one.
+  If both keys return the same body, tenant scoping is broken.
+}

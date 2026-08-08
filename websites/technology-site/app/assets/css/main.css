@@ -1,0 +1,313 @@
+@import "tailwindcss";
+
+/*
+ * Faces, self-hosted from public/fonts. `swap` so text is readable during load
+ * rather than invisible — this is a reading site and a blank article is a worse
+ * failure than a moment of fallback type.
+ */
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/publicsans-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Public Sans';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/publicsans-400-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/publicsans-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/publicsans-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/publicsans-700.woff2') format('woff2');
+}
+
+/*
+ * Technology Site.
+ *
+ * DIRECTION: the reference the user pinned is nuxt.com, adopted at full
+ * fidelity — its slate-950 ground, Public Sans, the #00DC82 brand green, its
+ * 6px radius language, and mono reserved strictly for code.
+ *
+ * ---------------------------------------------------------------------------
+ * KNOWN AND ACCEPTED: this site and gaming-site now resemble each other.
+ *
+ * websites/CLAUDE.md and root CLAUDE.md §1 require the two public sites to read
+ * as unrelated publications. They no longer fully do: both run a near-black
+ * ground, both use an open-source Franklin-descended grotesque (Public Sans
+ * here, Work Sans there), and both carry a green-family accent (#00DC82 here,
+ * acid lime there).
+ *
+ * This was raised with the user on 2026-08-06 with the collision spelled out,
+ * and building it anyway was their explicit decision. It is recorded here, in
+ * DESIGN.md, and in both site CLAUDE.md files so that the next person to touch
+ * this does not read the resemblance as a bug and "fix" it.
+ *
+ * The mitigation offered and declined was re-accenting gaming-site off green.
+ * If the sites are ever to be pulled apart again, that is the cheapest lever:
+ * each site owns its own @theme block and there is no shared theme package, so
+ * divergence stays a one-file change per site.
+ * ---------------------------------------------------------------------------
+ *
+ * Disciplines:
+ *   1. ONE brand colour. It marks the brand and interaction. It is not a
+ *      general-purpose highlight, and it never tints body text.
+ *   2. Mono is for code, data and measurement only — never as a costume for
+ *      "technical".
+ *   3. Radii are 4/6/8px and nothing else. A stray 12px or a pill reads as a
+ *      different system.
+ */
+
+@theme {
+  /* --- Ground -------------------------------------------------------- */
+  /* Blue-tinted near-black, as the reference uses. */
+  --color-ground: oklch(0.129 0.042 264.695);
+  --color-surface: oklch(0.208 0.042 265.755);
+  --color-surface-hi: oklch(0.279 0.041 260.031);
+  --color-line: oklch(0.279 0.041 260.031);
+  --color-line-soft: oklch(0.234 0.042 263);
+
+  /* --- Text ---------------------------------------------------------- */
+  --color-text: oklch(0.929 0.013 255.508);
+  --color-muted: oklch(0.704 0.04 256.788);
+  --color-faint: oklch(0.554 0.041 257.417);
+
+  /* --- Brand --------------------------------------------------------- */
+  /* The reference's signature green. The one accent. */
+  --color-brand: oklch(0.792 0.187 158);
+  --color-brand-deep: oklch(0.70 0.17 157);
+
+  /* --- Type ---------------------------------------------------------- */
+  --font-sans: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* --- Radii --------------------------------------------------------- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+/* Small uppercase label — sections and meta. */
+@utility label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-ground);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 1.0625rem;
+    line-height: 1.65;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* The reference sets display type tight and heavy. */
+  h1, h2, h3 {
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  ::selection {
+    background-color: var(--color-brand);
+    color: var(--color-ground);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/*
+ * Article body.
+ *
+ * The most important block in the file — it is most of the page most of the
+ * time. Measure capped so it holds at every viewport, and the space above a
+ * heading always exceeds the space below it.
+ */
+@layer components {
+  .doc {
+    max-width: 42rem;
+    font-size: 1.125rem;
+    line-height: 1.75;
+    color: var(--color-text);
+  }
+
+  .doc > * + * {
+    margin-top: 1.4em;
+  }
+
+  .doc h2 {
+    font-size: clamp(1.4rem, 1.15rem + 1.1vw, 1.8rem);
+    line-height: 1.2;
+    margin-top: 2.4em;
+    margin-bottom: 0;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--color-line);
+  }
+
+  .doc h2 + * {
+    margin-top: 0.65em;
+  }
+
+  .doc h3 {
+    font-size: 1.22rem;
+    line-height: 1.3;
+    margin-top: 2em;
+  }
+
+  .doc h3 + * {
+    margin-top: 0.5em;
+  }
+
+  .doc ul,
+  .doc ol {
+    padding-left: 0;
+    list-style: none;
+    counter-reset: item;
+  }
+
+  .doc li {
+    position: relative;
+    padding-left: 1.9rem;
+    margin-top: 0.7em;
+    line-height: 1.65;
+  }
+
+  .doc ol > li {
+    counter-increment: item;
+  }
+
+  .doc ol > li::before {
+    content: counter(item) ".";
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--color-brand);
+  }
+
+  .doc ul > li::before {
+    content: "";
+    position: absolute;
+    left: 0.3rem;
+    top: 0.72em;
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 9999px;
+    background-color: var(--color-brand);
+  }
+
+  /*
+   * Pull quote. Deliberately not a thick coloured left bar — that device is a
+   * recognisable generated-UI tell and the design detector flags it. Emphasis
+   * comes from size and weight.
+   */
+  .doc blockquote {
+    margin-top: 2em;
+    margin-bottom: 2em;
+    padding: 1.25rem 1.4rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-surface);
+    font-size: 1.16rem;
+    font-weight: 500;
+    line-height: 1.45;
+  }
+
+  .doc blockquote p {
+    margin-top: 0;
+  }
+
+  .doc hr {
+    border: 0;
+    margin: 2.4em 0;
+    border-top: 1px solid var(--color-line);
+  }
+
+  .doc a {
+    color: var(--color-brand);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+
+  .doc a:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  .doc strong {
+    font-weight: 700;
+    color: #fff;
+  }
+
+  /* Mono appears here and nowhere else: code, data, measurement. */
+  .doc code {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-sm);
+    padding: 0.1em 0.36em;
+  }
+
+  .doc pre {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+  }
+
+  .doc pre code {
+    background: none;
+    border: 0;
+    padding: 0;
+    font-size: inherit;
+  }
+}

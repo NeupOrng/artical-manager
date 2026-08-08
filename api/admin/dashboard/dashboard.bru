@@ -1,0 +1,27 @@
+meta { name: Dashboard summary, type: http, seq: 1 }
+
+get { url: {{adminBase}}/dashboard, body: none, auth: none }
+
+headers { Cookie: {{sessionCookie}} }
+
+docs {
+  The first screen after login. One endpoint, two shapes, chosen server-side
+  from the resolved principal — the caller cannot ask for the other one.
+
+  As a tenant author:
+    tenant-wide article counts, this author's own counts, media count, and the
+    8 most recently EDITED articles (any status, ordered by updated_at).
+
+  As a platform admin:
+    every tenant with authorCount / publishedCount / draftCount, and nothing
+    else. AGGREGATES ONLY — no article titles, slugs, or content. Root
+    CLAUDE.md §1 gives a platform admin no access to any tenant's content, and a
+    title appearing here would be a reversal of that, not a new field.
+
+  Worth re-checking after any change to the tenant stats query: it once returned
+  zero for every count (a correlated subquery that did not correlate), which
+  looks exactly like a brand-new installation rather than an error. There are
+  now repository tests asserting the counts are non-zero.
+
+  Full shapes in core-engine/docs/api-reference.md.
+}

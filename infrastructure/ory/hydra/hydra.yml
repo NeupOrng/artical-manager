@@ -1,0 +1,57 @@
+# Ory Hydra — OAuth2 / OIDC provider.
+#
+# DEPLOYED BUT NOT IN THE LOGIN PATH. Read ./README.md before wiring anything to
+# it — using Hydra for the backoffice browser login means building a login and
+# consent provider, and it buys nothing over a first-party Kratos session for a
+# single first-party admin app.
+#
+# What it is here for: the moment a non-browser client needs to call the admin
+# API (a CLI, a scheduled job, a third-party integration), this is already
+# running and the change is one authenticator swap in Oathkeeper.
+#
+# dsn and secrets come from the environment — Hydra uses the same override
+# naming as Kratos (DSN, SECRETS_SYSTEM, SECRETS_COOKIE). Not `${VAR}`
+# placeholders: Hydra does no substitution on this file.
+
+serve:
+  public:
+    port: 4444
+  admin:
+    # Internal only, never published. Anything that reaches this can mint tokens
+    # and accept login challenges on anyone's behalf.
+    port: 4445
+  cookies:
+    same_site_mode: Lax
+
+urls:
+  self:
+    issuer: http://localhost:4444/
+  # These point at the backoffice and are UNUSED until a login/consent provider
+  # is actually built there. They are recorded so the shape of the future change
+  # is visible rather than rediscovered.
+  login: http://localhost:3001/oauth2/login
+  consent: http://localhost:3001/oauth2/consent
+  logout: http://localhost:3001/oauth2/logout
+  error: http://localhost:3001/oauth2/error
+
+oauth2:
+  expose_internal_errors: false
+
+ttl:
+  access_token: 30m
+  refresh_token: 720h
+  id_token: 30m
+  auth_code: 10m
+
+strategies:
+  access_token: opaque
+
+# secrets.system comes from SECRETS_SYSTEM in the environment. Rotating it
+# invalidates every issued token, which is the intended behaviour for a
+# compromise. Not declared here — an empty YAML mapping would parse as null and
+# Hydra would refuse to boot with a less obvious error than "secret missing".
+
+log:
+  level: info
+  format: json
+  leak_sensitive_values: false

@@ -1,0 +1,6 @@
+{
+  "projectRoots": [
+    "websites/*",
+    "backoffice"
+  ]
+}

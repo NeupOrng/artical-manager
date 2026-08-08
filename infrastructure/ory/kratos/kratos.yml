@@ -1,0 +1,145 @@
+# Ory Kratos — identity and credentials.
+#
+# Kratos is the ONLY component that sees a password. NestJS reads one header and
+# never touches credentials; see core-engine/docs/auth-request-flow.md.
+#
+# Local development config. Every localhost URL below becomes the real admin
+# hostname in production. Read ./README.md before changing the identity schema —
+# the username/email split and the global-uniqueness constraint are both load
+# bearing.
+
+version: v1.3.0
+
+# dsn, secrets.*, and courier.smtp.connection_uri are NOT set here. They are
+# supplied by the environment in docker-compose.yml, using Kratos' own override
+# naming (nested keys uppercased and joined by underscore):
+#
+#   DSN, SECRETS_COOKIE, SECRETS_CIPHER, COURIER_SMTP_CONNECTION_URI
+#
+# Deliberately not `${VAR}` placeholders: Kratos does no substitution on this
+# file, so a placeholder would be read as a literal string and Kratos would try
+# to open a connection to a host called `${POSTGRES_USER}`. That is the same
+# failure mode documented for Kong's vault references in infrastructure/CLAUDE.md
+# — a config value that looks templated but isn't. Env overrides are native and
+# have no such trap.
+
+serve:
+  public:
+    # MUST match the path the backoffice proxies Kratos under. The browser only
+    # ever talks to the backoffice origin, so every self-service URL Kratos
+    # generates has to be expressed in those terms — get this wrong and flows
+    # render fine but submit to a host the browser cannot reach.
+    base_url: http://localhost:3001/.ory/
+    port: 4433
+    # No CORS: nothing is ever called cross-origin. The backoffice's Nitro proxy
+    # makes every request same-origin from the browser's point of view. Enabling
+    # CORS here would be the first step toward undoing that.
+    cors:
+      enabled: false
+  admin:
+    # Internal network only, never published. Anything that can reach this can
+    # create identities and impersonate anyone.
+    base_url: http://kratos:4434/
+    port: 4434
+
+selfservice:
+  default_browser_return_url: http://localhost:3001/
+  allowed_return_urls:
+    - http://localhost:3001
+
+  methods:
+    password:
+      enabled: true
+      config:
+        haveibeenpwned_enabled: true
+        min_password_length: 12
+        identifier_similarity_check_enabled: true
+    link:
+      enabled: true
+      config:
+        lifespan: 1h
+    # No oidc, no totp, no webauthn in phase 1. Adding one is a decision, not a
+    # default — see root CLAUDE.md §2.
+
+  flows:
+    error:
+      ui_url: http://localhost:3001/auth/error
+
+    login:
+      ui_url: http://localhost:3001/auth/login
+      lifespan: 10m
+
+    # Authors are provisioned by an admin, never self-registered. An identity
+    # with no matching `authors` row is a 403 at the API, so a public
+    # registration path would only ever manufacture accounts that cannot log in.
+    # The super admin is created through the admin API by the seed script.
+    registration:
+      enabled: false
+      ui_url: http://localhost:3001/auth/registration
+
+    settings:
+      ui_url: http://localhost:3001/auth/settings
+      privileged_session_max_age: 15m
+      required_aal: highest_available
+
+    recovery:
+      enabled: true
+      ui_url: http://localhost:3001/auth/recovery
+      use: link
+
+    verification:
+      enabled: true
+      ui_url: http://localhost:3001/auth/verification
+      use: link
+      after:
+        default_browser_return_url: http://localhost:3001/
+
+    logout:
+      after:
+        default_browser_return_url: http://localhost:3001/auth/login
+
+session:
+  lifespan: 24h
+  earliest_possible_extend: 1h
+  cookie:
+    # First-party to the backoffice origin. This is the whole reason the .ory
+    # proxy route exists — see backoffice/CLAUDE.md. Lax is sufficient precisely
+    # because nothing is cross-site; if this ever needs SameSite=None, the proxy
+    # has been broken.
+    domain: localhost
+    path: /
+    same_site: Lax
+    name: ory_kratos_session
+
+# secrets: supplied via SECRETS_COOKIE / SECRETS_CIPHER in the environment.
+# Never committed — infrastructure/CLAUDE.md, "No secrets in git".
+
+# Tuned down for local development so flows are not slow on a laptop. Production
+# should raise memory and iterations — these values are a dev-speed tradeoff, not
+# a recommendation.
+hashers:
+  argon2:
+    parallelism: 1
+    memory: 128MB
+    iterations: 2
+    salt_length: 16
+    key_length: 16
+
+identity:
+  default_schema_id: author
+  schemas:
+    - id: author
+      url: file:///etc/config/kratos/identity.schema.json
+
+courier:
+  smtp:
+    # connection_uri comes from COURIER_SMTP_CONNECTION_URI. Locally it points at
+    # a dev SMTP catcher, so recovery and verification mail lands in a web UI
+    # rather than a real inbox. Production needs a real provider.
+    from_address: no-reply@artical.local
+    from_name: Artical
+
+log:
+  level: info
+  format: text
+  leak_sensitive_values: false

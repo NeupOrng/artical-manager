@@ -1,0 +1,122 @@
+# DEV ONLY — the frontends as containers: both tenant sites and the backoffice.
+#
+# This file is never deployed. All three run on managed hosting in production
+# (root CLAUDE.md §4), which is why docker-compose.yml stays core-engine only
+# and matches what actually ships to the VPS. This override exists so local
+# development is one command and one `docker compose ps`.
+#
+#   task dev    → docker-compose.yml + this file
+#   task up     → docker-compose.yml only (production-shaped)
+#
+# `pnpm install` runs on every start rather than being guarded on a marker file:
+# node_modules is a named volume, so a dependency added on the host is otherwise
+# invisible to the container and you get a confusing "module not found" for a
+# package that is plainly in package.json. pnpm is fast when the lockfile hasn't
+# moved, so the cost is a couple of seconds.
+#
+# node_modules and .nuxt live in named volumes rather than the bind mount:
+# they hold platform-specific binaries and build state, so sharing them with
+# the host would break whichever of the two ran second — and bind-mounted
+# node_modules is where Docker-on-macOS file IO hurts most.
+
+name: artical
+
+services:
+  technology-site:
+    image: node:24-alpine
+    working_dir: /app
+    restart: unless-stopped
+    depends_on:
+      kong:
+        condition: service_healthy
+    environment:
+      # Inside the network the gateway is reachable by service name — NOT
+      # localhost, which would be the container itself.
+      NUXT_API_BASE_URL: http://kong:8000
+      NUXT_TENANT_KEY: ${TECH_TENANT_KEY}
+      NUXT_PUBLIC_SITE_URL: http://localhost:${TECH_SITE_PORT:-3100}
+      NUXT_PUBLIC_SITE_NAME: Technology Site
+      NUXT_REVALIDATE_SECRET: ${TECH_REVALIDATE_SECRET:-dev-secret}
+    volumes:
+      - ../../websites/technology-site:/app
+      - technology-site-modules:/app/node_modules
+      - technology-site-nuxt:/app/.nuxt
+    ports:
+      - '${TECH_SITE_PORT:-3100}:3100'
+    command: >
+      sh -c "
+      corepack enable &&
+      pnpm install --prefer-offline &&
+      pnpm exec nuxt dev --host 0.0.0.0 --port 3100
+      "
+
+  gaming-site:
+    image: node:24-alpine
+    working_dir: /app
+    restart: unless-stopped
+    depends_on:
+      kong:
+        condition: service_healthy
+    environment:
+      NUXT_API_BASE_URL: http://kong:8000
+      NUXT_TENANT_KEY: ${GAMING_TENANT_KEY}
+      NUXT_PUBLIC_SITE_URL: http://localhost:${GAMING_SITE_PORT:-3200}
+      NUXT_PUBLIC_SITE_NAME: Gaming Site
+      NUXT_REVALIDATE_SECRET: ${GAMING_REVALIDATE_SECRET:-dev-secret}
+    volumes:
+      - ../../websites/gaming-site:/app
+      - gaming-site-modules:/app/node_modules
+      - gaming-site-nuxt:/app/.nuxt
+    ports:
+      - '${GAMING_SITE_PORT:-3200}:3200'
+    command: >
+      sh -c "
+      corepack enable &&
+      pnpm install --prefer-offline &&
+      pnpm exec nuxt dev --host 0.0.0.0 --port 3200
+      "
+
+  # The backoffice. Same shape as the sites above, with one difference that
+  # matters: it talks to Kratos as well as to the API.
+  #
+  # PORT 3001 IS NOT ARBITRARY. Kratos' `serve.public.base_url` is
+  # http://localhost:3001/.ory/, and that value is what every self-service flow
+  # embeds in its `ui.action`. Publish this on a different host port and login
+  # breaks in a way that looks like a UI bug: the form renders correctly, then
+  # submits to an origin the browser was never on. Change one and you must
+  # change infrastructure/ory/kratos/kratos.yml with it — hence a fixed 3001
+  # here rather than ${BACKOFFICE_PORT}, which would let the two drift silently.
+  backoffice:
+    image: node:24-alpine
+    working_dir: /app
+    restart: unless-stopped
+    depends_on:
+      kong:
+        condition: service_healthy
+    environment:
+      # Service names, not localhost — a container's localhost is itself.
+      NUXT_API_BASE_URL: http://kong:8000
+      # Through Kong rather than straight to kratos:4433, so local development
+      # exercises the same gateway route production uses. A broken kratos-public
+      # route then fails here instead of after deploy.
+      NUXT_KRATOS_PUBLIC_URL: http://kong:8000/.ory
+    volumes:
+      - ../../backoffice:/app
+      - backoffice-modules:/app/node_modules
+      - backoffice-nuxt:/app/.nuxt
+    ports:
+      - '3001:3001'
+    command: >
+      sh -c "
+      corepack enable &&
+      pnpm install --prefer-offline &&
+      pnpm exec nuxt dev --host 0.0.0.0 --port 3001
+      "
+
+volumes:
+  technology-site-modules:
+  technology-site-nuxt:
+  gaming-site-modules:
+  gaming-site-nuxt:
+  backoffice-modules:
+  backoffice-nuxt:

@@ -1,0 +1,3 @@
+meta { name: Refusal — no key must 401, type: http, seq: 5 }
+get { url: {{publicBase}}/articles, body: none, auth: none }
+docs { Expect 401 from Kong. The request must never reach NestJS. }

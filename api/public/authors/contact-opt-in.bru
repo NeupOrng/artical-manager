@@ -1,0 +1,17 @@
+meta { name: Contact details respect the opt-in, type: http, seq: 3 }
+get { url: {{publicBase}}/authors/{{techAuthor}}, body: none, auth: none }
+headers { X-Tenant-Key: {{techTenantKey}} }
+docs {
+  Verifies the contact opt-in.
+
+  With `contact_public = true` (the local seed), `email` and `telegram` are
+  populated. Set it false and re-run — both must become null while `quote`
+  and `name` stay:
+
+    UPDATE authors SET contact_public = false WHERE username = 'mara-okonkwo';
+
+  NOTE: Kong caches public GETs for 60s (proxy-cache, see
+  infrastructure/kong/kong.template.yml). Add a cache-busting query param
+  or wait out the TTL, or you will see the previous body and think the
+  opt-in is broken. It is not — this cost an afternoon once already.
+}

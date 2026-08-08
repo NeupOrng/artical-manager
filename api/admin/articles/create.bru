@@ -1,0 +1,23 @@
+meta { name: Create a draft, type: http, seq: 2 }
+
+post { url: {{adminBase}}/articles, body: json, auth: none }
+
+headers { Cookie: {{sessionCookie}} }
+
+body:json {
+  {
+    "title": "A draft written from Bruno"
+  }
+}
+
+docs {
+  Always creates a DRAFT — there is no path that creates something already
+  public. The slug is derived from the title unless you send one.
+
+  Authorship comes from the SESSION. Adding "authorId" here returns 400:
+  forbidNonWhitelisted rejects unknown fields, which is what stops a contributor
+  publishing under someone else's byline.
+
+  Sending the same title twice returns 409 ARTICLE_DUPLICATE_SLUG — but the same
+  slug in the OTHER tenant is fine, and that is the point.
+}

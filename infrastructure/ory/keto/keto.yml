@@ -1,0 +1,32 @@
+# Ory Keto — relationship-based permissions.
+#
+# DEPLOYED BUT NOT THE AUTHORITY. NestJS decides permissions from the live
+# `authors.role` / `platform_admins` row. Read ./README.md — the namespaces below
+# describe where this is going, not what enforces anything today.
+#
+# dsn comes from DSN in the environment; Keto does no substitution on this file.
+
+version: v0.12.0
+
+serve:
+  read:
+    port: 4466
+  write:
+    # Internal only. Write access to Keto is write access to every permission in
+    # the system.
+    port: 4467
+  metrics:
+    port: 4468
+
+namespaces:
+  - id: 0
+    name: Tenant
+  - id: 1
+    name: Article
+  - id: 2
+    name: Platform
+
+log:
+  level: info
+  format: json
+  leak_sensitive_values: false

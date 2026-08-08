@@ -1,0 +1,10 @@
+{
+  "version": "1",
+  "name": "artical-manager",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git",
+    ".env"
+  ]
+}

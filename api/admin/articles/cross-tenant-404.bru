@@ -1,0 +1,17 @@
+meta { name: Refusal — cross-tenant must 404, type: http, seq: 4 }
+
+get { url: {{adminBase}}/articles/{{otherTenantArticleId}}, body: none, auth: none }
+
+headers { Cookie: {{sessionCookie}} }
+
+docs {
+  An article id belonging to the OTHER tenant, requested with this tenant's
+  session.
+
+  Expect 404 — never 403, and never the article. A 403 would confirm the
+  resource exists, which leaks across the isolation boundary just as surely as
+  returning the body would. See core-engine/docs/tenant-isolation.md.
+
+  Set otherTenantArticleId by listing articles while signed in as the other
+  tenant's author (devin-hartley).
+}

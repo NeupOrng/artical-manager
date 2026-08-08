@@ -1,0 +1,14 @@
+meta { name: Refusal — forged consumer header, type: http, seq: 6 }
+get { url: {{publicBase}}/articles/{{sharedSlug}}, body: none, auth: none }
+headers {
+  X-Tenant-Key: {{gamingTenantKey}}
+  X-Consumer-Custom-ID: 0198f000-0000-7000-8000-000000000001
+}
+docs {
+  A valid GAMING key plus a forged technology tenant id in X-Consumer-Custom-ID.
+  Kong overwrites X-Consumer-* rather than appending, so this must return the
+  GAMING article. If it returns the technology one, the gateway is not stripping
+  client-supplied consumer headers and any tenant can read any other.
+
+  This is the test that backs the "verified, not assumed" claim in kong.yml.
+}

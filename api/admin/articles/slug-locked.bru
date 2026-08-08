@@ -1,0 +1,22 @@
+meta { name: Refusal — published slug is locked, type: http, seq: 5 }
+
+patch { url: {{adminBase}}/articles/{{articleId}}, body: json, auth: none }
+
+headers { Cookie: {{sessionCookie}} }
+
+body:json {
+  {
+    "slug": "a-completely-different-slug"
+  }
+}
+
+docs {
+  Against a PUBLISHED article. Expect 409 ARTICLE_SLUG_LOCKED.
+
+  The slug is a live public URL: already shared, indexed by crawlers, and cached
+  in ISR pages that only revalidate on publish. Changing it breaks every one of
+  those silently, so the aggregate refuses. Unpublish first if it really must
+  change.
+
+  The same request against a DRAFT succeeds.
+}

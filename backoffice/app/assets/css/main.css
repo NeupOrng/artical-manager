@@ -1,0 +1,186 @@
+@import 'tailwindcss';
+
+/**
+ * Artical backoffice — design tokens.
+ *
+ * Direction: the category standard, executed straight. Chosen 2026-08-09 over a
+ * rolled distinctive world; see PRODUCT.md → Brand Commitments. Craft bar is the
+ * Vercel dashboard: high-contrast light ground, geometric restraint, minimal
+ * ornament, monospace reserved for identifiers.
+ *
+ * LIGHT IS THE DESIGNED DEFAULT, and not by category habit — it comes from the
+ * use scene. Ten people, indoor office light, a laptop, all day. It also keeps
+ * this tool from being mistaken for the publications it manages: both tenant
+ * sites are near-black, and an admin that matched them would read as a third
+ * one. Dark is supported because people work at night, not because it is the
+ * house style.
+ *
+ * Tailwind v4 is CSS-first — tokens live here, there is no tailwind.config.js,
+ * and there is deliberately no shared preset with websites/*.
+ */
+
+@theme {
+  /* ── Neutrals ────────────────────────────────────────────────────────────
+     A single ramp. Every grey in the UI comes from here, so a surface and its
+     border can never drift into two different families. */
+  --color-bg: oklch(100% 0 0);
+  --color-bg-subtle: oklch(98.2% 0 0);
+  --color-bg-sunken: oklch(96.4% 0 0);
+  --color-panel: oklch(100% 0 0);
+
+  --color-border: oklch(92.2% 0 0);
+  --color-border-strong: oklch(86% 0 0);
+
+  --color-fg: oklch(20% 0 0);
+  --color-fg-muted: oklch(50.5% 0 0);
+  --color-fg-subtle: oklch(64% 0 0);
+
+  /* ── Accent ──────────────────────────────────────────────────────────────
+     One accent, and it carries meaning rather than decoration: the primary
+     action, focus, and the active nav tab. It never tints body text and is
+     never a general-purpose highlight — widening its job is what turns a tool
+     into a marketing page. */
+  --color-accent: oklch(54% 0.21 259);
+  --color-accent-hover: oklch(48% 0.21 259);
+  --color-accent-fg: oklch(100% 0 0);
+  --color-accent-subtle: oklch(96.5% 0.02 259);
+
+  /* ── Status ──────────────────────────────────────────────────────────────
+     Meaning colours, used only for state. Each has a surface and a foreground
+     that meets 4.5:1 on it — a pill whose text sits at 3:1 on its own tint is
+     the usual failure here.
+
+     Never the only signal. Status always carries a word too; an editor who
+     cannot distinguish these must still be able to tell a draft from a live
+     article, and getting that wrong publishes the wrong thing. */
+  --color-live: oklch(52% 0.13 158);
+  --color-live-surface: oklch(96% 0.04 158);
+  --color-draft: oklch(52% 0.12 70);
+  --color-draft-surface: oklch(96.5% 0.045 70);
+  --color-danger: oklch(52% 0.19 27);
+  --color-danger-surface: oklch(96.5% 0.03 27);
+
+  /* ── Type ────────────────────────────────────────────────────────────────
+     System stacks on purpose. An Operate surface is well served by a workhorse
+     UI face, and a self-hosted webfont in a tool buys nothing but bytes and a
+     flash of unstyled text on every navigation. The publications self-host
+     their faces because typography is part of their identity; this is not.
+
+     Mono is for IDENTIFIERS ONLY — domains, slugs, ids, keys. Never as a
+     costume for "technical". */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
+
+  /* ── Radius ──────────────────────────────────────────────────────────────
+     Three steps and nothing else. A stray 12px or a pill on a card reads as a
+     different system. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* ── Elevation ───────────────────────────────────────────────────────────
+     Borders do the structural work; shadow is reserved for things that
+     genuinely float. Both carry a real offset and a soft blur — a zero-offset
+     coloured halo is decoration, not depth. */
+  --shadow-sm: 0 1px 2px 0 oklch(0% 0 0 / 0.05);
+  --shadow-md: 0 4px 12px -2px oklch(0% 0 0 / 0.10), 0 2px 4px -2px oklch(0% 0 0 / 0.06);
+}
+
+/**
+ * Dark. Supported, not the designed default.
+ *
+ * Surfaces LIFT as they come forward (panel is lighter than the page), which is
+ * the inverse of light mode. Inverting a light ramp directly is what produces
+ * the muddy "dark mode that looks broken" — the ramp is re-authored, not
+ * flipped.
+ *
+ * PLAIN `:root`, NOT `@theme`. Tailwind v4 hoists `@theme` to the top level
+ * regardless of what it is nested inside, so `@media { @theme { … } }` does not
+ * scope anything — the dark values simply overwrite the light ones for everyone
+ * and the light design never renders at all. Found the hard way: the page came
+ * up dark with `prefers-color-scheme: light` reported by the browser.
+ *
+ * Redefining the same custom properties on `:root` inside the media query does
+ * work, because every generated utility resolves through `var(--color-…)`.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: oklch(17.5% 0 0);
+    --color-bg-subtle: oklch(20.5% 0 0);
+    --color-bg-sunken: oklch(14.5% 0 0);
+    --color-panel: oklch(21% 0 0);
+
+    --color-border: oklch(29% 0 0);
+    --color-border-strong: oklch(37% 0 0);
+
+    --color-fg: oklch(96% 0 0);
+    --color-fg-muted: oklch(71% 0 0);
+    --color-fg-subtle: oklch(58% 0 0);
+
+    --color-accent: oklch(66% 0.18 259);
+    --color-accent-hover: oklch(73% 0.17 259);
+    --color-accent-fg: oklch(17% 0 0);
+    --color-accent-subtle: oklch(27% 0.06 259);
+
+    --color-live: oklch(76% 0.15 158);
+    --color-live-surface: oklch(26% 0.05 158);
+    --color-draft: oklch(80% 0.13 70);
+    --color-draft-surface: oklch(27% 0.05 70);
+    --color-danger: oklch(70% 0.17 27);
+    --color-danger-surface: oklch(27% 0.06 27);
+
+    --shadow-sm: 0 1px 2px 0 oklch(0% 0 0 / 0.4);
+    --shadow-md: 0 4px 12px -2px oklch(0% 0 0 / 0.5), 0 2px 4px -2px oklch(0% 0 0 / 0.4);
+  }
+}
+
+html {
+  /* The page ground is the subtle grey; panels sit on it in white. Reversing
+     these (white page, grey cards) makes every table look like it is floating
+     in a document rather than sitting in an application. */
+  background: var(--color-bg-subtle);
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--color-bg-subtle);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Headings set their own tracking. At UI sizes the default tracking on a system
+   sans reads loose next to dense tabular data. */
+h1, h2, h3 {
+  letter-spacing: -0.011em;
+  text-wrap: balance;
+}
+
+/* Focus must stay visible — this is a keyboard-heavy tool used all day, and
+   Tailwind's reset removes the UA outline. Offset so it never sits on top of
+   the element's own border. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Numbers in tables and figures align on the digit. Without this, proportional
+   numerals make a stacked column of counts look ragged. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

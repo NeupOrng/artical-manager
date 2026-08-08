@@ -1,0 +1,91 @@
+# ---------------------------------------------------------------------------
+# Dependencies & package-manager state
+# ---------------------------------------------------------------------------
+node_modules/
+.pnpm-store/
+.pnpm/
+.yarn/cache/
+.yarn/install-state.gz
+# Lockfiles ARE committed — one per deployable unit (core-engine, backoffice,
+# websites/*). Do not add pnpm-lock.yaml here.
+
+# ---------------------------------------------------------------------------
+# Build output & tool caches
+# ---------------------------------------------------------------------------
+dist/
+build/
+.output/
+.nuxt/
+.nitro/
+.cache/
+.turbo/
+.vercel/
+*.tsbuildinfo
+
+# ---------------------------------------------------------------------------
+# Test output
+# ---------------------------------------------------------------------------
+coverage/
+.nyc_output/
+
+# ---------------------------------------------------------------------------
+# Secrets & environment
+# Every real .env stays local; only the *.example templates are committed.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+infrastructure/env/*.env
+!infrastructure/env/*.env.example
+*.pem
+*.key
+!**/*.pub
+
+# ---------------------------------------------------------------------------
+# Local runtime data (Docker volumes, uploads, DB dumps, backups)
+# ---------------------------------------------------------------------------
+infrastructure/data/
+infrastructure/backups/
+*.sql.gz
+*.dump
+
+# ---------------------------------------------------------------------------
+# Logs & local dev server state
+# ---------------------------------------------------------------------------
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+.dev/
+*.pid
+
+# ---------------------------------------------------------------------------
+# Assistant / tooling local state
+# Shared config is committed (.claude/skills, .impeccable/config.json);
+# per-machine state is not.
+# ---------------------------------------------------------------------------
+.claude/settings.local.json
+**/.impeccable/hook.cache.json
+**/.impeccable/hook.pending.json
+**/.impeccable/config.local.json
+**/.impeccable/questions/
+
+# impeccable installs itself once per host harness, and each copy hardcodes its
+# own path. We commit the Claude Code copy only (it pins the version, since
+# impeccable is in no package.json). The GitHub Copilot copy is a reinstallable
+# artifact — `npx impeccable install` regenerates it. Do not commit both.
+.github/skills/impeccable/
+.github/agents/impeccable-*.agent.md
+.github/hooks/impeccable.json
+
+# ---------------------------------------------------------------------------
+# Editor & OS
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.swp
+*~
