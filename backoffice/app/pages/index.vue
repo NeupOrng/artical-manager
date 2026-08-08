@@ -10,7 +10,7 @@
  * The TABLE is the page. The figures above it are reference values on the way
  * down, deliberately quiet — see StatFigure.
  */
-const { data: dashboard, error, status } = await useDashboard()
+const { data: dashboard, error, status, refresh } = await useDashboard()
 const { relative, absolute } = useRelativeTime()
 
 useHead({ title: 'Dashboard · Artical' })
@@ -155,8 +155,13 @@ useHead({ title: 'Dashboard · Artical' })
           </table>
         </div>
 
-        <p class="mt-3 text-xs text-fg-subtle">
-          Editing is not built yet — this view is read-only.
+        <p class="mt-3 text-[0.8125rem]">
+          <NuxtLink
+            to="/articles"
+            class="text-fg-muted underline-offset-2 transition-colors hover:text-accent hover:underline"
+          >
+            All articles →
+          </NuxtLink>
         </p>
       </section>
     </template>
@@ -234,5 +239,32 @@ useHead({ title: 'Dashboard · Artical' })
         any site's articles, which is why only counts appear here.
       </p>
     </template>
+
+    <!--
+      Fallback. Without it this page can render NOTHING: the branches above cover
+      pending, error, author and platform-admin, and any other combination — data
+      resolved but null, or a `kind` this build does not know — falls through to
+      an empty <div> and a blank screen with no console error to explain it.
+      A page that can render nothing eventually will.
+    -->
+    <div
+      v-else
+      class="rounded-lg border border-dashed border-border-strong bg-panel px-6 py-10 text-center"
+    >
+      <p class="text-[0.8125rem] font-medium">
+        Nothing to show
+      </p>
+      <p class="mx-auto mt-1 max-w-sm text-[0.8125rem] text-fg-muted">
+        Your account loaded but returned no dashboard. Reloading usually fixes
+        it; if it does not, sign out and back in.
+      </p>
+      <button
+        type="button"
+        class="mt-4 rounded-md border border-border bg-bg px-3 py-1.5 text-[0.8125rem] font-medium transition-colors hover:bg-bg-sunken"
+        @click="refresh()"
+      >
+        Reload
+      </button>
+    </div>
   </div>
 </template>

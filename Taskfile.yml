@@ -236,6 +236,19 @@ tasks:
     cmds:
       - pnpm run start:worker
 
+  restart:backoffice:
+    desc: Restart the backoffice container — needed after adding a dependency
+    # node_modules is a named volume, so `pnpm add` on the host is invisible to
+    # the running container until it restarts and re-runs pnpm install.
+    #
+    # Skipping this does NOT surface as "module not found". Vite's dev URLs
+    # embed the pnpm dependency hash, so the browser 404s on entry.async.js and
+    # main.css and the page never hydrates — it looks broken, not stale.
+    # Hard-reload the browser afterwards.
+    cmds:
+      - docker restart artical-backoffice-1
+      - 'echo "restarted — now hard-reload the browser (shift-cmd-R)"'
+
   dev:backoffice:
     desc: Run the backoffice on the HOST instead of in compose (needs `task up`)
     dir: '{{.BACKOFFICE}}'

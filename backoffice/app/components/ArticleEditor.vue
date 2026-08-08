@@ -141,7 +141,7 @@ const marks = [
          scrolling away at the top of the document. -->
     <div
       v-if="editor"
-      class="sticky top-[6.5rem] z-10 flex flex-wrap items-center gap-0.5 border-b border-border bg-panel/95 px-2 py-1.5 backdrop-blur-sm"
+      class="sticky top-[0] z-10 flex flex-wrap items-center gap-0.5 border-b border-border bg-panel/95 px-2 py-1.5 backdrop-blur-sm"
     >
       <button
         v-for="mark in marks"

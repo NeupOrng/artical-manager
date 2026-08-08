@@ -168,6 +168,34 @@ Do not "fix" the platform view by adding titles to it. That is root `CLAUDE.md`
 §1 holding, not a half-built screen — the page says so to the user for the same
 reason.
 
+## Adding a dependency requires restarting the container
+
+`task dev` runs this app as a container whose `node_modules` and `.nuxt` are
+**named volumes**, not the host directory. So `pnpm add` on the host is invisible
+to the running app — the compose file runs `pnpm install` on every start for
+exactly this reason, but only on *start*.
+
+```bash
+pnpm add <pkg>                       # host: updates package.json + lockfile
+docker restart artical-backoffice-1  # container: actually installs it
+```
+
+**The symptom is not "module not found".** Vite's dev URLs embed the pnpm
+dependency hash and an optimizer stamp:
+
+```
+/_nuxt/app/node_modules/.pnpm/nuxt@4.5.2_…_a73835c6dfc4170a6ce7c88052f8f432/…/entry.async.js
+/_nuxt/assets/css/main.css
+```
+
+Installing anything changes that hash. A browser tab still holding the previous
+page then requests the old URLs and gets **404 on `entry.async.js` and
+`main.css`** — the client bundle never loads, so the page does not hydrate. It
+looks like the app is broken rather than like a stale tab.
+
+Fix: restart the container, then **hard reload** the browser (⇧⌘R). A normal
+refresh can reuse the cached document and reproduce it.
+
 ## Response types
 
 Hand-written in `app/types/api.ts` from `../core-engine/docs/api-reference.md`.
