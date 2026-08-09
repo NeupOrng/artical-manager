@@ -196,6 +196,38 @@ looks like the app is broken rather than like a stale tab.
 Fix: restart the container, then **hard reload** the browser (⇧⌘R). A normal
 refresh can reuse the cached document and reproduce it.
 
+## Port 3001 is pinned, and that makes origin collisions likely
+
+Kratos advertises `http://localhost:3001/.ory/` in `serve.public.base_url`, so
+this app cannot simply move to another port — see
+`infrastructure/compose/docker-compose.sites.yml`.
+
+The consequence: **any other local project that has ever used port 3001 shares
+this browser origin**, and browsers key cache, storage, and service workers by
+origin. A cached document from that other project can be served to you here, and
+its asset URLs 404 because they point into *its* directory.
+
+Diagnosed once, 2026-08-09. The 404s looked like ours:
+
+```
+GET /_nuxt/Users/…/Documents/nuxt/novuxt/app/assets/css/main.css      404
+GET /_nuxt/Users/…/novuxt/node_modules/.pnpm/nuxt@4.4.8_…/entry.async.js  404
+```
+
+Two tells that it is **not** this app:
+
+- the path contains another project's directory, and this app runs in a
+  container where every path is `/app/…` — it can never emit `/Users/…`
+- the nuxt version does not match this project's
+
+`entry.async.js` is the client bootstrap, so when it 404s nothing hydrates and
+the page looks blank or dead.
+
+Fix in the browser: **Clear site data** for `localhost:3001` (DevTools →
+Application → Storage) and unregister any service worker listed there. Moving
+the *other* project to a different port is the durable fix, since this one's port
+is pinned by Kratos.
+
 ## Response types
 
 Hand-written in `app/types/api.ts` from `../core-engine/docs/api-reference.md`.
