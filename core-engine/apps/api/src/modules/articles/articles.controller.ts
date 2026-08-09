@@ -30,7 +30,6 @@ import {
   DuplicateSlugError,
   type ArticleRepository,
 } from '@core/article';
-import { AUTHOR_REPOSITORY, type AuthorRepository } from '@core/author';
 import {
   asArticleId,
   asAuthorId,
@@ -67,7 +66,6 @@ import {
 export class ArticlesController {
   constructor(
     @Inject(ARTICLE_REPOSITORY) private readonly repo: ArticleRepository,
-    @Inject(AUTHOR_REPOSITORY) private readonly authors: AuthorRepository,
   ) {}
 
   @Get()
@@ -117,8 +115,9 @@ export class ArticlesController {
     @CurrentAuthor() author: AuthorPrincipal,
     @Param('articleId', ParseUUIDPipe) articleId: string,
   ): Promise<ArticleDetailDto> {
-    const article = await this.load(author, articleId);
-    return this.detail(author, article);
+    // No separate load: detail() reads the same tenant-scoped row and throws
+    // ArticleNotFoundError on a miss, so a cross-tenant id still 404s.
+    return this.detail(author, articleId);
   }
 
   @Post()
@@ -150,7 +149,7 @@ export class ArticlesController {
     await this.assertSlugFree(author, article.slug);
     await this.repo.create(author.tenantId, article);
 
-    return this.detail(author, article);
+    return this.detail(author, article.id);
   }
 
   @Patch(':articleId')
@@ -186,7 +185,7 @@ export class ArticlesController {
     }
 
     await this.repo.update(author.tenantId, article);
-    return this.detail(author, article);
+    return this.detail(author, articleId);
   }
 
   /**
@@ -216,7 +215,7 @@ export class ArticlesController {
     article.publish(new Date());
 
     await this.repo.update(author.tenantId, article);
-    return this.detail(author, article);
+    return this.detail(author, articleId);
   }
 
   @Post(':articleId/unpublish')
@@ -234,7 +233,7 @@ export class ArticlesController {
     article.unpublish();
 
     await this.repo.update(author.tenantId, article);
-    return this.detail(author, article);
+    return this.detail(author, articleId);
   }
 
   @Delete(':articleId')
@@ -253,23 +252,43 @@ export class ArticlesController {
   }
 
   /**
-   * Resolves the byline for a single-article response.
+   * Builds a single-article response by RE-READING the row.
    *
-   * Scoped by tenant like every other author lookup — an article's author_id
-   * always belongs to the same tenant, and looking it up unscoped would be the
-   * one query in this file that could cross the boundary.
+   * Deliberately not composed from the aggregate: an aggregate carries domain
+   * state, not storage bookkeeping, so `updated_at`, the author's name and the
+   * category name are simply not on it. Synthesising them produced a response
+   * that looked right and was wrong — `updatedAt` was `new Date()`, so the
+   * editor reported every article as "edited just now", and `categoryName` was
+   * hardcoded null while the list showed the real one.
+   *
+   * One extra query per write, in exchange for a response that always matches
+   * what the next reader will see.
    */
   private async detail(
     principal: AuthorPrincipal,
-    article: Article,
+    articleId: string,
   ): Promise<ArticleDetailDto> {
-    const p = article.toProps();
-    // Almost always the caller themselves, so skip the round trip in that case.
-    if (p.authorId === principal.authorId) {
-      return toDetail(article, principal.name);
-    }
-    const found = await this.authors.findById(principal.tenantId, p.authorId);
-    return toDetail(article, found?.name ?? 'Unknown author');
+    const row = await this.repo.findDetailById(principal.tenantId, articleId);
+    // Unreachable: every caller has just loaded or written this article inside
+    // the same request. A miss means it was deleted concurrently.
+    if (!row) throw new ArticleNotFoundError(articleId);
+
+    return {
+      id: row.id,
+      title: row.title,
+      slug: row.slug,
+      status: row.status,
+      excerpt: row.excerpt,
+      coverImage: row.coverImage,
+      publishedAt: row.publishedAt?.toISOString() ?? null,
+      updatedAt: row.updatedAt.toISOString(),
+      authorId: row.authorId,
+      authorName: row.authorName,
+      categoryId: row.categoryId,
+      categoryName: row.categoryName,
+      content: row.content,
+      missingToPublish: missingFrom(row),
+    };
   }
 
   /** Tenant-scoped load, or 404. Never distinguishes missing from another tenant's. */
@@ -310,27 +329,3 @@ function missingFrom(item: {
   return missing;
 }
 
-function toDetail(article: Article, authorName: string): ArticleDetailDto {
-  const p = article.toProps();
-  return {
-    id: p.id,
-    title: p.title,
-    slug: p.slug,
-    status: p.status,
-    excerpt: p.excerpt,
-    coverImage: p.coverImage,
-    publishedAt: p.publishedAt?.toISOString() ?? null,
-    // The row's updated_at is set by the repository on write, so the aggregate
-    // does not carry one. Reporting "now" is honest for a response produced by
-    // that same write.
-    updatedAt: new Date().toISOString(),
-    authorId: p.authorId,
-    authorName,
-    categoryId: p.categoryId,
-    // Not joined on a single-article read. The editor renders the category from
-    // its own picker, which already has the names.
-    categoryName: null,
-    content: p.content,
-    missingToPublish: article.missingToPublish(),
-  } satisfies ArticleDetailDto;
-}

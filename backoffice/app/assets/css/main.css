@@ -31,9 +31,23 @@
   --color-border: oklch(92.2% 0 0);
   --color-border-strong: oklch(86% 0 0);
 
+  /**
+   * Three text steps, and ALL THREE carry real text, so all three must clear
+   * 4.5:1 on the surfaces they sit on.
+   *
+   * `fg-subtle` was oklch(64%) and measured **3.19–3.36:1** on the panel at
+   * 12px — the field hints, the character counter, and the "edited …" timestamp
+   * were all below the floor. Tightened to 57%, with muted pulled to 46% so the
+   * ramp keeps three distinguishable steps rather than collapsing into two.
+   *
+   * Measured, not eyeballed: re-check with a contrast probe after changing any
+   * of these, because a "slightly lighter grey" is exactly how this regresses.
+   */
   --color-fg: oklch(20% 0 0);
-  --color-fg-muted: oklch(50.5% 0 0);
-  --color-fg-subtle: oklch(64% 0 0);
+  --color-fg-muted: oklch(46% 0 0);
+  /* 57% still measured 4.25–4.48 at 12px — under the 4.5 floor. 54% clears it
+     on both the page ground and the panel. */
+  --color-fg-subtle: oklch(54% 0 0);
 
   /* ── Accent ──────────────────────────────────────────────────────────────
      One accent, and it carries meaning rather than decoration: the primary
@@ -116,8 +130,10 @@
     --color-border-strong: oklch(37% 0 0);
 
     --color-fg: oklch(96% 0 0);
-    --color-fg-muted: oklch(71% 0 0);
-    --color-fg-subtle: oklch(58% 0 0);
+    --color-fg-muted: oklch(76% 0 0);
+    /* Raised from 58%: on the dark panel that measured under 4.5:1 for the same
+       12px hints the light ramp failed on. */
+    --color-fg-subtle: oklch(66% 0 0);
 
     --color-accent: oklch(66% 0.18 259);
     --color-accent-hover: oklch(73% 0.17 259);

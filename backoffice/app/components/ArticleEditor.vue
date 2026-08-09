@@ -2,6 +2,7 @@
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
+import type { IconName } from '~/components/AppIcon.vue'
 // Placeholder lives in @tiptap/extensions in v3, not in StarterKit.
 import { Placeholder } from '@tiptap/extensions'
 
@@ -96,8 +97,8 @@ watch(model, (value) => {
   })
 })
 
-const can = (name: string, attrs?: Record<string, unknown>) =>
-  editor.value?.isActive(name, attrs) ?? false
+const isActive = ([name, attrs]: [string, Record<string, unknown>?]) =>
+  editor.value?.isActive(name, attrs ?? {}) ?? false
 
 function openLinkDialog() {
   linkUrl.value = editor.value?.getAttributes('link').href ?? ''
@@ -121,128 +122,101 @@ async function insertImage(file: File | undefined | null) {
 }
 
 /**
- * Toolbar. Grouped by what the control does to the text rather than by
- * TipTap's internal taxonomy — an author thinks "make this a heading", not
- * "toggle a node type".
+ * Toolbar model.
+ *
+ * Grouped by what the control does to the text rather than by TipTap's internal
+ * taxonomy — an author thinks "make this a heading", not "toggle a node type".
+ *
+ * Every control is an ICON, drawn on the same 16-unit grid at the same stroke
+ * weight. The earlier mix of letterforms and unicode glyphs (B, •—, ", {}, —)
+ * never optically aligned, and a glyph standing in for an icon is exactly the
+ * default the craft floor rules out.
  */
-const marks = [
-  { name: 'bold', label: 'B', title: 'Bold', class: 'font-bold' },
-  { name: 'italic', label: 'I', title: 'Italic', class: 'italic' },
-  { name: 'strike', label: 'S', title: 'Strikethrough', class: 'line-through' },
-  { name: 'code', label: '<>', title: 'Inline code', class: 'font-mono text-[0.6875rem]' },
-] as const
+type Tool = {
+  icon: IconName
+  title: string
+  /** What `isActive` is checked against, when the control is a toggle. */
+  active?: [string, Record<string, unknown>?]
+  run: () => void
+}
+
+const groups = computed<Tool[][]>(() => {
+  const e = editor.value
+  if (!e) return []
+  const chain = () => e.chain().focus()
+
+  return [
+    [
+      { icon: 'bold', title: 'Bold  ⌘B', active: ['bold'], run: () => chain().toggleBold().run() },
+      { icon: 'italic', title: 'Italic  ⌘I', active: ['italic'], run: () => chain().toggleItalic().run() },
+      { icon: 'strike', title: 'Strikethrough', active: ['strike'], run: () => chain().toggleStrike().run() },
+      { icon: 'code', title: 'Inline code', active: ['code'], run: () => chain().toggleCode().run() },
+    ],
+    [
+      { icon: 'heading-2', title: 'Heading', active: ['heading', { level: 2 }], run: () => chain().toggleHeading({ level: 2 }).run() },
+      { icon: 'heading-3', title: 'Subheading', active: ['heading', { level: 3 }], run: () => chain().toggleHeading({ level: 3 }).run() },
+    ],
+    [
+      { icon: 'bullet-list', title: 'Bullet list', active: ['bulletList'], run: () => chain().toggleBulletList().run() },
+      { icon: 'ordered-list', title: 'Numbered list', active: ['orderedList'], run: () => chain().toggleOrderedList().run() },
+      { icon: 'quote', title: 'Quote', active: ['blockquote'], run: () => chain().toggleBlockquote().run() },
+      { icon: 'code-block', title: 'Code block', active: ['codeBlock'], run: () => chain().toggleCodeBlock().run() },
+    ],
+    [
+      { icon: 'link', title: 'Link  ⌘K', active: ['link'], run: openLinkDialog },
+      { icon: 'image', title: 'Insert image', run: () => bodyImageInput.value?.click() },
+      { icon: 'rule', title: 'Divider', run: () => chain().setHorizontalRule().run() },
+    ],
+  ]
+})
 </script>
 
 <template>
-  <div
-    class="overflow-hidden rounded-md border border-border bg-panel focus-within:border-accent"
-  >
+  <!--
+    NO `overflow-hidden` HERE, deliberately.
+
+    It is the obvious way to clip the toolbar to the rounded corners, and it
+    silently breaks the sticky toolbar: `overflow` on an ancestor makes it the
+    sticky element's containing scroll box, so the toolbar stops tracking the
+    viewport and drifts down over the article text as you scroll. It looks like
+    the toolbar has come loose from the editor.
+
+    The corners are rounded on the toolbar and the content instead.
+  -->
+  <div class="rounded-md border border-border bg-panel focus-within:border-accent">
     <!-- Sticky so the controls stay reachable in a long article rather than
-         scrolling away at the top of the document. -->
+         scrolling away at the top of the document. `--header-h` is published by
+         the layout; a hardcoded offset drifts the moment the header changes. -->
     <div
       v-if="editor"
-      class="sticky top-[0] z-10 flex flex-wrap items-center gap-0.5 border-b border-border bg-panel/95 px-2 py-1.5 backdrop-blur-sm"
+      class="sticky top-[var(--header-h,0px)] z-10 flex flex-wrap items-center gap-0.5 rounded-t-md border-b border-border bg-panel/95 px-2 py-1.5 backdrop-blur-sm"
     >
-      <button
-        v-for="mark in marks"
-        :key="mark.name"
-        type="button"
-        :title="mark.title"
-        :aria-pressed="can(mark.name)"
-        class="grid size-7 place-items-center rounded text-xs transition-colors hover:bg-bg-sunken"
-        :class="[mark.class, can(mark.name) ? 'bg-bg-sunken text-fg' : 'text-fg-muted']"
-        @click="editor.chain().focus().toggleMark(mark.name).run()"
-      >
-        {{ mark.label }}
-      </button>
-
-      <span class="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-
-      <button
-        v-for="level in ([2, 3] as const)"
-        :key="level"
-        type="button"
-        :title="`Heading ${level}`"
-        :aria-pressed="can('heading', { level })"
-        class="grid h-7 min-w-7 place-items-center rounded px-1.5 text-xs font-semibold transition-colors hover:bg-bg-sunken"
-        :class="can('heading', { level }) ? 'bg-bg-sunken text-fg' : 'text-fg-muted'"
-        @click="editor.chain().focus().toggleHeading({ level }).run()"
-      >
-        H{{ level }}
-      </button>
-
-      <span class="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-
-      <button
-        type="button"
-        title="Bullet list"
-        :aria-pressed="can('bulletList')"
-        class="grid size-7 place-items-center rounded text-xs transition-colors hover:bg-bg-sunken"
-        :class="can('bulletList') ? 'bg-bg-sunken text-fg' : 'text-fg-muted'"
-        @click="editor.chain().focus().toggleBulletList().run()"
-      >
-        •—
-      </button>
-      <button
-        type="button"
-        title="Numbered list"
-        :aria-pressed="can('orderedList')"
-        class="grid size-7 place-items-center rounded text-xs transition-colors hover:bg-bg-sunken"
-        :class="can('orderedList') ? 'bg-bg-sunken text-fg' : 'text-fg-muted'"
-        @click="editor.chain().focus().toggleOrderedList().run()"
-      >
-        1.
-      </button>
-      <button
-        type="button"
-        title="Quote"
-        :aria-pressed="can('blockquote')"
-        class="grid size-7 place-items-center rounded text-sm transition-colors hover:bg-bg-sunken"
-        :class="can('blockquote') ? 'bg-bg-sunken text-fg' : 'text-fg-muted'"
-        @click="editor.chain().focus().toggleBlockquote().run()"
-      >
-        ”
-      </button>
-      <button
-        type="button"
-        title="Code block"
-        :aria-pressed="can('codeBlock')"
-        class="grid size-7 place-items-center rounded font-mono text-[0.6875rem] transition-colors hover:bg-bg-sunken"
-        :class="can('codeBlock') ? 'bg-bg-sunken text-fg' : 'text-fg-muted'"
-        @click="editor.chain().focus().toggleCodeBlock().run()"
-      >
-        {}
-      </button>
-
-      <span class="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-
-      <button
-        type="button"
-        title="Link"
-        :aria-pressed="can('link')"
-        class="grid h-7 min-w-7 place-items-center rounded px-1.5 text-xs transition-colors hover:bg-bg-sunken"
-        :class="can('link') ? 'bg-bg-sunken text-fg' : 'text-fg-muted'"
-        @click="openLinkDialog"
-      >
-        Link
-      </button>
-      <button
-        type="button"
-        title="Insert image"
-        :disabled="uploadState.uploading"
-        class="grid h-7 min-w-7 place-items-center rounded px-1.5 text-xs text-fg-muted transition-colors hover:bg-bg-sunken disabled:opacity-50"
-        @click="bodyImageInput?.click()"
-      >
-        {{ uploadState.uploading ? `${uploadState.progress}%` : 'Image' }}
-      </button>
-      <button
-        type="button"
-        title="Horizontal rule"
-        class="grid h-7 min-w-7 place-items-center rounded px-1.5 text-xs text-fg-muted transition-colors hover:bg-bg-sunken"
-        @click="editor.chain().focus().setHorizontalRule().run()"
-      >
-        —
-      </button>
+      <template v-for="(group, gi) in groups" :key="gi">
+        <span
+          v-if="gi > 0"
+          class="mx-1 h-4 w-px bg-border"
+          aria-hidden="true"
+        />
+        <button
+          v-for="tool in group"
+          :key="tool.icon"
+          type="button"
+          :title="tool.title"
+          :aria-label="tool.title"
+          :aria-pressed="tool.active ? isActive(tool.active) : undefined"
+          :disabled="tool.icon === 'image' && uploadState.uploading"
+          class="grid size-7 place-items-center rounded transition-colors hover:bg-bg-sunken disabled:opacity-50"
+          :class="tool.active && isActive(tool.active) ? 'bg-bg-sunken text-fg' : 'text-fg-muted'"
+          @click="tool.run()"
+        >
+          <!-- Upload progress replaces the icon in place, so the toolbar does
+               not reflow mid-upload. -->
+          <span v-if="tool.icon === 'image' && uploadState.uploading" class="tnum text-[0.625rem] font-medium">
+            {{ uploadState.progress }}
+          </span>
+          <AppIcon v-else :name="tool.icon" :size="15" />
+        </button>
+      </template>
     </div>
 
     <!-- Link entry inline rather than a modal: it interrupts nothing and the
@@ -294,9 +268,17 @@ const marks = [
  */
 .article-editor .ProseMirror {
   min-height: 26rem;
-  padding: 1rem 1.25rem 2rem;
-  /* 65–75ch. Long-form text set full-width across a desktop is unreadable. */
-  max-width: 68ch;
+  padding: 1.5rem 1.5rem 3rem;
+  /*
+   * NO max-width here. The measure is controlled by the PANEL's width instead
+   * (the editor column is capped at 46rem on the page), so the text fills its
+   * container edge to edge and lands at roughly 72ch on its own.
+   *
+   * Capping the measure inside a much wider panel was the wrong lever twice
+   * over: left aligned it hugged one edge with ~40% dead space, and centred it
+   * read as a stray indent on short paragraphs. Sizing the container to the
+   * content is what actually fits.
+   */
   font-size: 0.9375rem;
   line-height: 1.7;
 }

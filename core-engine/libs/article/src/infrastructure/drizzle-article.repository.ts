@@ -286,6 +286,63 @@ export class DrizzleArticleRepository implements ArticleRepository {
     };
   }
 
+  async findDetailById(
+    tenantId: TenantId,
+    articleId: string,
+  ): Promise<(AdminArticleListItem & { content: unknown }) | null> {
+    // Same joins and the same tenant scoping as listForAdmin, so the editor and
+    // the list can never disagree about an article's author, category or
+    // updated time.
+    const [row] = await this.db
+      .select({
+        id: articles.id,
+        title: articles.title,
+        slug: articles.slug,
+        status: articles.status,
+        excerpt: articles.excerpt,
+        coverImage: articles.coverImage,
+        content: articles.content,
+        publishedAt: articles.publishedAt,
+        updatedAt: articles.updatedAt,
+        authorId: articles.authorId,
+        authorName: authors.name,
+        categoryId: articles.categoryId,
+        categoryName: categories.name,
+      })
+      .from(articles)
+      .innerJoin(
+        authors,
+        and(eq(authors.id, articles.authorId), eq(authors.tenantId, tenantId)),
+      )
+      .leftJoin(
+        categories,
+        and(
+          eq(categories.id, articles.categoryId),
+          eq(categories.tenantId, tenantId),
+        ),
+      )
+      .where(and(eq(articles.tenantId, tenantId), eq(articles.id, articleId)))
+      .limit(1);
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      title: row.title,
+      slug: row.slug,
+      status: row.status as 'draft' | 'published',
+      excerpt: row.excerpt,
+      coverImage: row.coverImage,
+      content: row.content,
+      publishedAt: row.publishedAt,
+      updatedAt: row.updatedAt,
+      authorId: row.authorId,
+      authorName: row.authorName,
+      categoryId: row.categoryId,
+      categoryName: row.categoryName,
+    };
+  }
+
   async create(tenantId: TenantId, article: Article): Promise<void> {
     const p = article.toProps();
     await this.db.insert(articles).values({

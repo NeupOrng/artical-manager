@@ -67,7 +67,19 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-dvh">
+  <!--
+    `--header-h` is published here so anything else that needs to stick below
+    the header can reference it instead of hardcoding a guess. The editor
+    toolbar did exactly that (6.5rem against a 92px header) and left a 12px band
+    where page content scrolled between the two.
+
+    The height genuinely varies: a tenant author gets the section-tab row, a
+    platform admin does not.
+  -->
+  <div
+    class="min-h-dvh"
+    :style="{ '--header-h': nav.length ? '5.75rem' : '4rem' }"
+  >
     <header class="sticky top-0 z-20 border-b border-border bg-bg/85 backdrop-blur-sm">
       <!-- Row one: identity and account. -->
       <div class="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:px-6">

@@ -164,6 +164,21 @@ export interface ArticleRepository {
     options: ListForAdminOptions,
   ): Promise<Paginated<AdminArticleListItem>>;
 
+  /**
+   * The read model behind a single-article admin response: the row as stored,
+   * with the author and category names joined.
+   *
+   * Separate from `findById` because that returns the AGGREGATE, and an
+   * aggregate deliberately does not carry storage bookkeeping like
+   * `updated_at`. Reconstructing the response from the aggregate alone meant
+   * inventing a value for it — which shipped as `new Date()`, so the editor
+   * reported every article as "edited just now" regardless of the truth.
+   */
+  findDetailById(
+    tenantId: TenantId,
+    articleId: string,
+  ): Promise<(AdminArticleListItem & { content: unknown }) | null>;
+
   create(tenantId: TenantId, article: Article): Promise<void>;
 
   /**

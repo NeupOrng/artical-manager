@@ -145,6 +145,52 @@ async function destroy() {
   }
 }
 
+/**
+ * ⌘S / Ctrl-S saves.
+ *
+ * This is a tool people use all day, and the muscle memory is universal — without
+ * it the browser's own "save page" dialog fires over the editor, which is both
+ * useless and alarming. `preventDefault` is the point of the handler.
+ */
+function onKeydown(e: KeyboardEvent) {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault()
+    if (isDirty.value && !saving.value && !busy.value) save()
+  }
+}
+
+/**
+ * Unsaved-work guards. An article body is real work and losing it is the worst
+ * thing this screen can do.
+ *
+ * Two are needed because they cover different exits: `beforeunload` catches a
+ * closed tab or a typed URL, and the router guard catches in-app navigation,
+ * which never triggers `beforeunload` in an SPA.
+ */
+function onBeforeUnload(e: BeforeUnloadEvent) {
+  if (!isDirty.value) return
+  e.preventDefault()
+  // Browsers ignore custom text now, but assigning returnValue is still what
+  // arms the prompt in several of them.
+  e.returnValue = ''
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+  window.addEventListener('beforeunload', onBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('beforeunload', onBeforeUnload)
+})
+
+onBeforeRouteLeave(() => {
+  if (!isDirty.value) return true
+  // eslint-disable-next-line no-alert
+  return confirm('You have unsaved changes. Leave without saving?')
+})
+
 useHead({ title: () => `${article.value?.title ?? 'Article'} · Artical` })
 </script>
 
@@ -239,7 +285,20 @@ useHead({ title: () => `${article.value?.title ?? 'Article'} · Artical` })
         </p>
       </div>
 
-      <div class="mt-6 grid gap-6 lg:grid-cols-[1fr_18rem] lg:items-start">
+      <!--
+        The editor column is CAPPED at 38rem rather than taking all remaining
+        width, and the text fills it edge to edge with no inner max-width.
+
+        Sizing the CONTAINER rather than the text is what fixes this. Capping
+        the measure inside a full-width panel left ~40% dead space and read as
+        broken layout; centring that narrow measure read as a stray indent. The
+        container is the thing that was wrong.
+
+        40rem lands the measure at ~68ch — measured with a real glyph probe, not
+        guessed. 46rem was the first attempt and produced ~95ch, well past the
+        65–75ch band and tiring to read across.
+      -->
+      <div class="mt-6 grid justify-center gap-6 lg:grid-cols-[minmax(0,40rem)_19rem] lg:items-start">
         <!-- Writing surface -->
         <div class="space-y-4">
           <label class="block">
