@@ -99,6 +99,10 @@ describe('DrizzleTenantRepository.listAllWithStats', () => {
       'name',
       'nicheLabel',
       'publishedCount',
+      // Added 2026-09-12, deliberately: an internal analytics id, not content.
+      // The dashboard uses it to fetch an aggregate (views30d) and never puts
+      // it on the wire — TenantSummaryDto does not carry it.
+      'umamiWebsiteId',
     ]);
   });
 });

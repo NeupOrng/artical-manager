@@ -5,6 +5,13 @@ import { v7 as uuidv7 } from 'uuid';
 import { platformAdmins } from '../schema';
 
 /**
+ * The value `.env.example` ships and the README documents, so a fresh clone can
+ * log in without editing anything. Kept in sync with both by hand — change all
+ * three together or the README starts lying.
+ */
+const DEV_DEFAULT_PASSWORD = 'artical-dev-platform-2026';
+
+/**
  * Creates the platform super admin: a Kratos identity plus the `platform_admins`
  * row that makes it a recognised principal. Both are required — one without the
  * other is an account that can log in but gets a 403, or a database row nobody
@@ -126,9 +133,22 @@ async function main(): Promise<void> {
   };
   const password = required('SUPER_ADMIN_PASSWORD');
 
+  // The old placeholder, still present in .env files created before the dev
+  // default existed. Kratos would reject it anyway; this says why.
   if (password === 'replace-me-at-least-12-chars') {
     throw new Error(
       'SUPER_ADMIN_PASSWORD is still the placeholder from .env.example. Set a real one.',
+    );
+  }
+
+  // The dev default is published in the README and .env.example of a public
+  // repo, so it is fine on a laptop and a known credential anywhere else. This
+  // seed legitimately runs in production (it bootstraps the first operator),
+  // which is exactly where a copied-over .env.example would do the damage.
+  if (process.env.NODE_ENV === 'production' && password === DEV_DEFAULT_PASSWORD) {
+    throw new Error(
+      'SUPER_ADMIN_PASSWORD is the published local-dev default. '
+      + 'Set a real one before seeding a production environment.',
     );
   }
 

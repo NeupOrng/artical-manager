@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import postgres from 'postgres';
 import { v7 as uuidv7 } from 'uuid';
 import { tenants, authors, categories, articles } from '../schema';
@@ -32,14 +32,32 @@ const TENANTS = [
     nicheLabel: 'technology',
     categories: ['reviews', 'guides', 'news'],
     articles: TECHNOLOGY_ARTICLES,
-    author: {
-      username: 'mara-okonkwo',
-      name: 'Mara Okonkwo',
-      email: 'mara@technology-site.localhost',
-      quote:
-        'I take things apart to find out what the spec sheet left out. Fifteen years of that, and the answer is usually the hinge.',
-      telegram: '@maraokonkwo',
-    },
+    // The FIRST author is the lead: an admin who authors every fixture
+    // article. The second is a contributor, seeded so the role split (write
+    // but not publish, delete, or manage categories) can be tested by hand and
+    // by the integration suite. Usernames are globally unique in Kratos, so no
+    // two entries anywhere in this file may share one.
+    authors: [
+      {
+        username: 'mara-okonkwo',
+        name: 'Mara Okonkwo',
+        email: 'mara@technology-site.localhost',
+        quote:
+          'I take things apart to find out what the spec sheet left out. Fifteen years of that, and the answer is usually the hinge.',
+        telegram: '@maraokonkwo',
+        contactPublic: true,
+        role: 'admin',
+      },
+      {
+        username: 'nina-sato',
+        name: 'Nina Sato',
+        email: 'nina@technology-site.localhost',
+        quote: null,
+        telegram: null,
+        contactPublic: false,
+        role: 'contributor',
+      },
+    ],
   },
   {
     id: '0198f000-0000-7000-8000-000000000002',
@@ -48,14 +66,27 @@ const TENANTS = [
     nicheLabel: 'gaming',
     categories: ['reviews', 'guides', 'news', 'esports'],
     articles: GAMING_ARTICLES,
-    author: {
-      username: 'devin-hartley',
-      name: 'Devin Hartley',
-      email: 'devin@gaming-site.localhost',
-      quote:
-        'Forty hours in before I write a word. If a game is worth covering it is worth getting lost in first.',
-      telegram: '@devinhartley',
-    },
+    authors: [
+      {
+        username: 'devin-hartley',
+        name: 'Devin Hartley',
+        email: 'devin@gaming-site.localhost',
+        quote:
+          'Forty hours in before I write a word. If a game is worth covering it is worth getting lost in first.',
+        telegram: '@devinhartley',
+        contactPublic: true,
+        role: 'admin',
+      },
+      {
+        username: 'leo-marsh',
+        name: 'Leo Marsh',
+        email: 'leo@gaming-site.localhost',
+        quote: null,
+        telegram: null,
+        contactPublic: false,
+        role: 'contributor',
+      },
+    ],
   },
 ] as const;
 
@@ -123,52 +154,74 @@ async function main(): Promise<void> {
         })
         .onConflictDoNothing();
 
-      const authorId = uuidv7();
-      const existingAuthor = await db
-        .select({ id: authors.id })
-        .from(authors)
-        .where(eq(authors.tenantId, t.id))
-        .limit(1);
+      // Keyed by (tenant, username), NOT "the tenant's author". Each tenant now
+      // seeds two authors, so the previous lookup — the first author row in the
+      // tenant — would update whichever one Postgres returned first and quietly
+      // turn the contributor into Mara.
+      let resolvedAuthorId: string | null = null;
 
-      const resolvedAuthorId = existingAuthor[0]?.id ?? authorId;
+      for (const [index, a] of t.authors.entries()) {
+        const [byUsername] = await db
+          .select({ id: authors.id })
+          .from(authors)
+          .where(and(eq(authors.tenantId, t.id), eq(authors.username, a.username)))
+          .limit(1);
 
-      // Profile fields, applied on both insert and re-run: the seed predates
-      // the profile columns, so an existing dev database has an author row with
-      // a null username and would render an unlinked byline forever.
-      //
-      // SYNTHETIC. This person does not exist. `contact_public` is true only so
-      // the opt-in path is visible locally — it is NOT the production default,
-      // which is false (see schema/authors.ts).
-      const profile = {
-        username: t.author.username,
-        name: t.author.name,
-        email: t.author.email,
-        quote: t.author.quote,
-        telegram: t.author.telegram,
-        contactPublic: true,
-      };
+        // Databases seeded before the profile feature hold the lead author with
+        // a NULL username. Adopt that row for the lead instead of inserting a
+        // second copy of the same person.
+        const [legacy] = !byUsername && index === 0
+          ? await db
+              .select({ id: authors.id })
+              .from(authors)
+              .where(and(eq(authors.tenantId, t.id), isNull(authors.username)))
+              .limit(1)
+          : [];
 
-      if (existingAuthor[0]) {
-        await db
-          .update(authors)
-          .set(profile)
-          .where(
-            and(eq(authors.tenantId, t.id), eq(authors.id, resolvedAuthorId)),
-          );
+        const existing = byUsername ?? legacy;
+
+        // SYNTHETIC. These people do not exist. `contact_public` is true for the
+        // lead only so the opt-in path is visible locally — it is NOT the
+        // production default, which is false (see schema/authors.ts).
+        //
+        // `role` is re-applied on every run: fixtures are reset to their
+        // documented roles, so a role changed by hand while testing comes back.
+        const profile = {
+          username: a.username,
+          name: a.name,
+          email: a.email,
+          quote: a.quote,
+          telegram: a.telegram,
+          contactPublic: a.contactPublic,
+          role: a.role,
+        };
+
+        let id: string;
+        if (existing) {
+          id = existing.id;
+          await db
+            .update(authors)
+            .set(profile)
+            .where(and(eq(authors.tenantId, t.id), eq(authors.id, id)));
+        }
+        else {
+          id = uuidv7();
+          await db.insert(authors).values({
+            id,
+            tenantId: t.id,
+            // Placeholder — replaced with a real identity by `task db:seed:authors`.
+            kratosIdentityId: uuidv7(),
+            ...profile,
+          });
+        }
+
+        if (index === 0) resolvedAuthorId = id;
       }
-      else {
-        await db.insert(authors).values({
-          id: authorId,
-          tenantId: t.id,
-          // Placeholder — real authors arrive via Kratos registration.
-          kratosIdentityId: uuidv7(),
-          role: 'admin',
-          ...profile,
-        });
-      }
+
+      if (!resolvedAuthorId) throw new Error(`no lead author seeded for ${t.name}`);
 
       const categoryIds: Record<string, string> = {};
-      for (const slug of t.categories) {
+      for (const [position, slug] of t.categories.entries()) {
         await db
           .insert(categories)
           .values({
@@ -176,6 +229,9 @@ async function main(): Promise<void> {
             tenantId: t.id,
             name: slug.charAt(0).toUpperCase() + slug.slice(1),
             slug,
+            // Required since categories.position became NOT NULL. The fixture's
+            // array order is the nav order a fresh database starts with.
+            position,
           })
           .onConflictDoNothing();
 

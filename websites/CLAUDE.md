@@ -89,6 +89,26 @@ Header: X-Revalidate-Secret: <shared secret, per site>
 - Revalidation failures must not be treated as publish failures — the article is
   already live in the database.
 
+## View recording
+
+Every site records views the same way (both do, as of 2026-09-12): the article
+page calls `useRecordArticleView()` after mount — never during SSR, the page is
+ISR — at most once per article per browser session. The browser posts to the
+site's own `server/api/views.post.ts`, which adds the reader's IP and user agent
+as `X-Reader-*` headers and forwards to `POST /public/v1/views` with the tenant
+key. The API counts it, then forwards it to Umami for the backoffice dashboard.
+
+- Sent from the browser: `articleId`, and best-effort `referrer` (external only —
+  same-site navigation is dropped), `language`, `screen`. Never the URL or title;
+  the API derives those from the article.
+- **No analytics script on the sites**, by decision: nothing ad-blockable, nothing
+  extra on ISR pages, and Umami stays off the internet.
+- Failures are swallowed. A missed view must never affect reading.
+
+A new site copies `app/composables/useArticleViews.ts` and
+`server/api/views.post.ts` from technology-site. Detail:
+`../core-engine/docs/readership-analytics.md`.
+
 ## Preview
 
 `/_preview/:id` renders any status, gated by a short-lived signed token minted by the
@@ -123,6 +143,31 @@ The constraint that matters here:
 The current theme values in both sites are **placeholders**. Real palettes and
 type pairings come from the design work once each site's identity is settled —
 see the `TBD` fields in each site's `CLAUDE.md`, and the `frontend-design` skill.
+
+## Navigation
+
+Category nav comes from `/public/v1/categories`, cached in Nitro for 300s,
+in the order editors set in the backoffice.
+
+It used to be **derived from published articles** because no endpoint existed.
+That could only ever show sections which already had something published, so a
+newly created category stayed invisible and a renamed one kept its old label.
+Don't reintroduce that shortcut.
+
+## Section pages
+
+`/category/:slug` resolves the slug first, through `server/api/categories/[slug]`
+(→ `/public/v1/categories/:slug`, cached 300s):
+
+| API says | Page does |
+|---|---|
+| `kind: category` | renders, heading = the category's real **name**, meta description = its `description` or a generic line |
+| `kind: redirect` | **301** to `/category/<slug>` — the section was renamed; also canonicalises case |
+| 404 | **404** via `createError` — never an empty page with a 200 |
+
+Before this, any slug rendered as an empty section with a 200 (a soft 404 search
+engines index) titled from the slug. If the resolve call fails for another reason
+(API down) the page still renders from the slug — don't turn that into a 500.
 
 ## Rules
 

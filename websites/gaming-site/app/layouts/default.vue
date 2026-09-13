@@ -7,12 +7,14 @@
  * more than they do on the technology site, where the nav is a masthead you
  * pass once.
  */
+import type { PublicCategory } from '~~/types/api'
+
 const config = useRuntimeConfig()
 const route = useRoute()
 
 // Cached server-side (see server/api/categories.get.ts), so this costs one
 // call per TTL for the whole site rather than one per render.
-const { data: categories } = await useFetch<{ slug: string, count: number }[]>(
+const { data: categories } = await useFetch<PublicCategory[]>(
   '/api/categories',
   { default: () => [] },
 )
@@ -57,7 +59,7 @@ const activeCategory = computed(() =>
                 : 'text-mute hover:text-paper'
             "
           >
-            {{ category.slug }}
+            {{ category.name }}
           </NuxtLink>
         </nav>
       </div>

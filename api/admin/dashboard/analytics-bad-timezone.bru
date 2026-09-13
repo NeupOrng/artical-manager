@@ -1,0 +1,7 @@
+meta { name: Dashboard analytics — unknown time zone, type: http, seq: 3 }
+get { url: {{adminBase}}/dashboard/analytics?range=7d&tz=Mars/Olympus_Mons, body: none, auth: none }
+headers { Cookie: {{sessionCookie}} }
+docs {
+  400. An unknown zone is refused, never silently treated as UTC — that would
+  shift every day boundary without anyone noticing.
+}

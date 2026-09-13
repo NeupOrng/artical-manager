@@ -1,0 +1,8 @@
+meta { name: Rename category, type: http, seq: 5 }
+patch { url: {{adminBase}}/categories/{{categoryId}}, body: json, auth: none }
+headers { Cookie: {{sessionCookie}} }
+body:json { { "name": "Kit" } }
+docs {
+  A rename does NOT move the slug — the URL only changes when `slug` is sent
+  explicitly. Cross-tenant ids return 404, never 403.
+}

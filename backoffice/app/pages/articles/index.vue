@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ArticleFilters } from '~/composables/useArticles'
+import type { Readiness } from '~/types/api'
 
 /**
  * The article list — the working surface of this tool.
@@ -28,9 +29,31 @@ const filters = computed<ArticleFilters>(() => ({
   authorId: route.query.mine === '1' && me.value?.kind === 'author'
     ? me.value.id
     : undefined,
+  categoryId: (route.query.categoryId as string) || undefined,
+  readiness: (route.query.readiness as Readiness) || undefined,
 }))
 
+const READINESS_LABEL: Record<Readiness, string> = {
+  'ready': 'Ready to publish',
+  'needs-excerpt': 'Needs an excerpt',
+  'needs-cover': 'Needs a cover image',
+}
+
 const { data: list, status, error, refresh } = useArticleList(filters)
+
+/**
+ * The name for the category filter chip. The live list covers most cases; a
+ * retired category (reachable from the categories page) is not in it, so fall
+ * back to the label on the rows themselves — every row shares it.
+ */
+const { categories } = useCategories()
+const categoryFilterName = computed(() => {
+  const id = filters.value.categoryId
+  if (!id) return null
+  return categories.value.find(c => c.id === id)?.name
+    ?? list.value?.data[0]?.categoryName
+    ?? 'Selected category'
+})
 
 const setQuery = (patch: Record<string, string | undefined>) => {
   // A FILTER change returns to page one — staying on page 4 of a narrower
@@ -160,6 +183,35 @@ useHead({ title: 'Articles · Artical' })
         >
         Only mine
       </label>
+
+      <!-- Arrives from the categories page. A removable chip rather than a
+           control of its own: filtering by category is a drill-down, and the
+           way back out needs to be one obvious click. -->
+      <button
+        v-if="categoryFilterName"
+        type="button"
+        class="flex items-center gap-1.5 rounded-full border border-border bg-panel py-1 ps-2.5 pe-2 text-[0.8125rem] transition-colors hover:border-border-strong"
+        :aria-label="`Remove filter: category ${categoryFilterName}`"
+        @click="setQuery({ categoryId: undefined })"
+      >
+        <span class="text-fg-muted">Category</span>
+        <span class="font-medium">{{ categoryFilterName }}</span>
+        <span aria-hidden="true" class="text-fg-subtle">×</span>
+      </button>
+
+      <!-- Arrives from the dashboard's publishing pipeline. Same chip pattern
+           as the category drill-down: one obvious click back out. -->
+      <button
+        v-if="filters.readiness"
+        type="button"
+        class="flex items-center gap-1.5 rounded-full border border-border bg-panel py-1 ps-2.5 pe-2 text-[0.8125rem] transition-colors hover:border-border-strong"
+        :aria-label="`Remove filter: ${READINESS_LABEL[filters.readiness]}`"
+        @click="setQuery({ readiness: undefined })"
+      >
+        <span class="text-fg-muted">Drafts</span>
+        <span class="font-medium">{{ READINESS_LABEL[filters.readiness] }}</span>
+        <span aria-hidden="true" class="text-fg-subtle">×</span>
+      </button>
     </div>
 
     <div v-if="status === 'pending'" class="mt-4 animate-pulse space-y-2">
@@ -188,7 +240,7 @@ useHead({ title: 'Articles · Artical' })
       v-else-if="!list?.data.length"
       class="mt-4 rounded-lg border border-dashed border-border-strong bg-panel px-6 py-12 text-center"
     >
-      <template v-if="filters.search || filters.status || filters.authorId">
+      <template v-if="filters.search || filters.status || filters.authorId || filters.categoryId || filters.readiness">
         <p class="text-[0.8125rem] font-medium">
           Nothing matches those filters
         </p>

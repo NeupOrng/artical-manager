@@ -1,0 +1,10 @@
+meta { name: List categories incl. retired, type: http, seq: 7 }
+get { url: {{adminBase}}/categories?include=retired, body: none, auth: none }
+headers { Cookie: {{sessionCookie}} }
+docs {
+  What the categories page loads. Live categories first, in nav order, then
+  retired ones (`retiredAt` set). Without `include=retired` only live ones come
+  back — that is the article picker's list.
+
+  articleCount counts every status, drafts included.
+}

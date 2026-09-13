@@ -5,12 +5,14 @@
  * Follows the reference's header language — thin, quiet, translucent over the
  * ground, with the brand colour used only for the mark and the active state.
  */
+import type { PublicCategory } from '~~/types/api'
+
 const config = useRuntimeConfig()
 const route = useRoute()
 
 // Cached server-side (see server/api/categories.get.ts), so this costs one
 // call per TTL for the whole site rather than one per render.
-const { data: categories } = await useFetch<{ slug: string, count: number }[]>(
+const { data: categories } = await useFetch<PublicCategory[]>(
   '/api/categories',
   { default: () => [] },
 )
@@ -49,14 +51,14 @@ const activeCategory = computed(() =>
             v-for="category in categories"
             :key="category.slug"
             :to="`/category/${category.slug}`"
-            class="shrink-0 rounded-md px-2.5 py-1.5 text-[0.9rem] font-medium capitalize transition-colors"
+            class="shrink-0 rounded-md px-2.5 py-1.5 text-[0.9rem] font-medium transition-colors"
             :class="
               activeCategory === category.slug
                 ? 'bg-surface text-brand'
                 : 'text-muted hover:bg-surface hover:text-text'
             "
           >
-            {{ category.slug }}
+            {{ category.name }}
           </NuxtLink>
         </nav>
       </div>

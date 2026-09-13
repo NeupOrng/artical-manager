@@ -101,6 +101,15 @@ export class TenantSummaryDto {
 
   @ApiProperty()
   draftCount!: number;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description:
+      'Article views over the last 30 days (UTC days), from readership '
+      + 'analytics. Null when the site has no analytics website or the store is '
+      + 'unavailable. An aggregate like the others — never titles.',
+  })
+  views30d!: number | null;
 }
 
 export class PlatformDashboardDto {

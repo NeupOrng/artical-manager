@@ -34,7 +34,12 @@ interface KratosIdentity {
  * TENANTS array there. Two entries, one per tenant, and the usernames are what
  * you log in with.
  */
-const SEEDED_USERNAMES = ['mara-okonkwo', 'devin-hartley'];
+const SEEDED_USERNAMES = [
+  'mara-okonkwo', // Technology Site, admin
+  'nina-sato', // Technology Site, contributor
+  'devin-hartley', // Gaming Site, admin
+  'leo-marsh', // Gaming Site, contributor
+];
 
 const required = (name: string): string => {
   const value = process.env[name];

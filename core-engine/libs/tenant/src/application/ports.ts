@@ -23,6 +23,8 @@ export interface TenantWithStats {
   authorCount: number;
   publishedCount: number;
   draftCount: number;
+  /** For the per-site views figure; null = analytics not provisioned. */
+  umamiWebsiteId: string | null;
 }
 
 export interface TenantRepository {

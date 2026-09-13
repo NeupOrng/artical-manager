@@ -1,4 +1,5 @@
-import type { ArticleId, AuthorId, CategoryId, TenantId } from '@core/shared';
+import { slugify, type ArticleId, type AuthorId, type CategoryId, type TenantId } from '@core/shared';
+import { missingToPublishFrom, type PublishBlocker } from './readiness';
 import {
   EmptyTitleError,
   MissingCoverImageError,
@@ -10,26 +11,10 @@ import {
 /** An empty TipTap document. The content column is NOT NULL. */
 export const EMPTY_DOC = { type: 'doc', content: [] } as const;
 
-/**
- * Title → URL segment.
- *
- * Lives in the domain because a slug is a public, permanent identifier and the
- * rule for what one may contain has to be identical everywhere it is derived.
- *
- * Deliberately narrow: lowercase latin, digits and hyphens. Anything needing
- * percent-encoding is a problem in a shared link, and a case-sensitive slug
- * makes /article/Foo and /article/foo two different pages.
- */
-export function slugify(value: string): string {
-  return value
-    .normalize('NFKD')
-    // Strip diacritics so "café" becomes "cafe" rather than losing the word.
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 200);
-}
+
+// Re-exported so existing imports from @core/article keep working; the rule
+// itself lives in @core/shared because categories derive slugs the same way.
+export { slugify };
 
 export type ArticleStatus = 'draft' | 'published';
 
@@ -169,11 +154,8 @@ export class Article {
    * Derived from the same fields `assertShareable` checks, so the hint and the
    * enforcement cannot disagree.
    */
-  missingToPublish(): ('excerpt' | 'coverImage')[] {
-    const missing: ('excerpt' | 'coverImage')[] = [];
-    if (!this.props.excerpt) missing.push('excerpt');
-    if (!this.props.coverImage) missing.push('coverImage');
-    return missing;
+  missingToPublish(): PublishBlocker[] {
+    return missingToPublishFrom(this.props);
   }
 
   get id(): ArticleId {

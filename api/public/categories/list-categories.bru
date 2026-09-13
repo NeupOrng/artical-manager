@@ -1,0 +1,13 @@
+meta { name: List public categories, type: http, seq: 1 }
+get { url: {{publicBase}}/categories, body: none, auth: none }
+headers { X-Tenant-Key: {{techTenantKey}} }
+docs {
+  Site navigation. Live categories only.
+
+  Must NOT contain articleCount — that counts drafts, and exposing it would
+  leak how many unpublished pieces a tenant is sitting on. The public DTO is a
+  separate class, not the admin one with fields removed.
+
+  NOTE: Kong proxy-caches this for 60s and each site caches it in Nitro for
+  300s, so an edit takes up to ~6 minutes to reach a reader.
+}

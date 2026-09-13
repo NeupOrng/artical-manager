@@ -24,6 +24,8 @@ export interface TenantContext {
   tenantId: TenantId;
   name: string;
   domain: string;
+  /** Umami website for this tenant, or null when analytics is not provisioned. */
+  umamiWebsiteId: string | null;
 }
 
 @Injectable()
@@ -49,6 +51,7 @@ export class TenantContextGuard implements CanActivate {
       tenantId: tenant.id,
       name: tenant.name,
       domain: tenant.domain,
+      umamiWebsiteId: tenant.umamiWebsiteId,
     };
 
     return true;

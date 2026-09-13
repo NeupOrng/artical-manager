@@ -52,6 +52,26 @@ export interface AuthorProfile {
   articles: ArticleListItem[]
 }
 
+export interface PublicCategory {
+  name: string
+  /** URL segment: /category/:slug */
+  slug: string
+  /** Section summary. Often null — render a generic line instead. */
+  description: string | null
+}
+
+/**
+ * `GET /public/v1/categories/:slug`. A 404 means no such section.
+ *
+ * `redirect` means the section was renamed and lives at `slug` now — answer
+ * with a 301 there. The API reports it in the body rather than as an HTTP
+ * redirect because $fetch would follow one silently, and the page could then
+ * never tell the reader's browser the URL had moved.
+ */
+export type PublicCategoryResolution =
+  | { kind: 'category', name: string, slug: string, description: string | null }
+  | { kind: 'redirect', slug: string }
+
 export interface Paginated<T> {
   data: T[]
   meta: { page: number, perPage: number, total: number }

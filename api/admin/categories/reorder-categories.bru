@@ -1,0 +1,13 @@
+meta { name: Reorder categories, type: http, seq: 10 }
+post { url: {{adminBase}}/categories/reorder, body: json, auth: none }
+headers { Cookie: {{sessionCookie}} }
+body:json { { "ids": ["<every live category id, in the new order>"] } }
+docs {
+  Sets the nav order. The body must be EXACTLY the tenant's live category ids,
+  each once. Anything else — a missing id, a retired or foreign one, a
+  duplicate — is 409 CATEGORY_ORDER_STALE with { missing, unknown, duplicated }
+  in details. Refused rather than guessed at, because a partial order would
+  leave two sections sharing a position.
+
+  Returns the live list in its new order.
+}

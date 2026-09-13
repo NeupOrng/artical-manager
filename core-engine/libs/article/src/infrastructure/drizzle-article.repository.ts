@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, desc, ilike, ne, sql } from 'drizzle-orm';
+import { and, eq, desc, gte, ilike, inArray, isNull, lt, ne, sql, type SQL } from 'drizzle-orm';
 import {
   DATABASE,
   type Database,
@@ -20,10 +20,13 @@ import {
 // context and must not be reimplemented here — one copy, one place to be wrong.
 import { toPublicProfile } from '@core/author';
 import { Article, type ArticleStatus } from '../domain/article';
+import type { Readiness } from '../domain/readiness';
 import type {
   AdminArticleListItem,
   ArticleRepository,
   ArticleStats,
+  PublishedArticleRef,
+  PublishingPipeline,
   ListForAdminOptions,
   ListPublishedOptions,
   Paginated,
@@ -31,6 +34,20 @@ import type {
   PublishedArticleListItem,
   RecentArticleItem,
 } from '../application/ports';
+
+/**
+ * SQL for domain/readiness.ts — `!value` there means null OR empty here. Kept
+ * beside the queries that use it, and the ONLY place it is written, so the
+ * pipeline counts and the readiness list filter cannot disagree.
+ */
+const blank = (column: typeof articles.excerpt | typeof articles.coverImage) =>
+  sql`(${column} is null or ${column} = '')`;
+
+function readinessPredicate(readiness: Readiness): SQL {
+  if (readiness === 'needs-excerpt') return blank(articles.excerpt);
+  if (readiness === 'needs-cover') return blank(articles.coverImage);
+  return sql`(not ${blank(articles.excerpt)} and not ${blank(articles.coverImage)})`;
+}
 
 @Injectable()
 export class DrizzleArticleRepository implements ArticleRepository {
@@ -76,7 +93,16 @@ export class DrizzleArticleRepository implements ArticleRepository {
       )
       .leftJoin(
         categories,
-        and(eq(categories.id, articles.categoryId), eq(categories.tenantId, tenantId)),
+        and(
+          eq(categories.id, articles.categoryId),
+          eq(categories.tenantId, tenantId),
+          // LIVE categories only on the public surface. Without this, retiring
+          // `reviews` and creating a new `reviews` made /category/reviews list
+          // the old section's articles alongside the new one's — reproduced
+          // before the fix. It also stops cards linking to a section that now
+          // 404s. The admin joins keep retired labels on purpose.
+          isNull(categories.deletedAt),
+        ),
       )
       .leftJoin(
         media,
@@ -98,7 +124,16 @@ export class DrizzleArticleRepository implements ArticleRepository {
       )
       .leftJoin(
         categories,
-        and(eq(categories.id, articles.categoryId), eq(categories.tenantId, tenantId)),
+        and(
+          eq(categories.id, articles.categoryId),
+          eq(categories.tenantId, tenantId),
+          // LIVE categories only on the public surface. Without this, retiring
+          // `reviews` and creating a new `reviews` made /category/reviews list
+          // the old section's articles alongside the new one's — reproduced
+          // before the fix. It also stops cards linking to a section that now
+          // 404s. The admin joins keep retired labels on purpose.
+          isNull(categories.deletedAt),
+        ),
       )
       .where(where);
 
@@ -145,7 +180,16 @@ export class DrizzleArticleRepository implements ArticleRepository {
       )
       .leftJoin(
         categories,
-        and(eq(categories.id, articles.categoryId), eq(categories.tenantId, tenantId)),
+        and(
+          eq(categories.id, articles.categoryId),
+          eq(categories.tenantId, tenantId),
+          // LIVE categories only on the public surface. Without this, retiring
+          // `reviews` and creating a new `reviews` made /category/reviews list
+          // the old section's articles alongside the new one's — reproduced
+          // before the fix. It also stops cards linking to a section that now
+          // 404s. The admin joins keep retired labels on purpose.
+          isNull(categories.deletedAt),
+        ),
       )
       .where(
         and(
@@ -217,6 +261,12 @@ export class DrizzleArticleRepository implements ArticleRepository {
 
     if (options.status) filters.push(eq(articles.status, options.status));
     if (options.authorId) filters.push(eq(articles.authorId, options.authorId));
+    // Appended to the tenant predicate like every other filter, so filtering by
+    // another tenant's category id simply matches nothing.
+    if (options.categoryId) filters.push(eq(articles.categoryId, options.categoryId));
+    if (options.readiness) {
+      filters.push(eq(articles.status, 'draft'), readinessPredicate(options.readiness));
+    }
     if (options.search?.trim()) {
       // ilike with the term escaped — a title containing % or _ would otherwise
       // turn into a wildcard and quietly match everything.
@@ -407,6 +457,99 @@ export class DrizzleArticleRepository implements ArticleRepository {
       .limit(1);
 
     return Boolean(row);
+  }
+
+  async publishedBetween(
+    tenantId: TenantId,
+    from: Date,
+    to: Date,
+    options: { authorId?: string } = {},
+  ): Promise<PublishedArticleRef[]> {
+    const filters = [
+      eq(articles.tenantId, tenantId),
+      eq(articles.status, 'published'),
+      gte(articles.publishedAt, from),
+      lt(articles.publishedAt, to),
+    ];
+    if (options.authorId) filters.push(eq(articles.authorId, options.authorId));
+    return this.publishedRefs(tenantId, and(...filters)!);
+  }
+
+  async findPublishedBySlugs(tenantId: TenantId, slugs: string[]): Promise<PublishedArticleRef[]> {
+    if (slugs.length === 0) return [];
+    // Slug is unique per TENANT only — both sites may own the same one, so the
+    // tenant predicate is what makes this return the caller's article.
+    return this.publishedRefs(
+      tenantId,
+      and(
+        eq(articles.tenantId, tenantId),
+        eq(articles.status, 'published'),
+        inArray(articles.slug, slugs),
+      )!,
+    );
+  }
+
+  async pipeline(
+    tenantId: TenantId,
+    options: { authorId?: string } = {},
+  ): Promise<PublishingPipeline> {
+    const scope = [eq(articles.tenantId, tenantId)];
+    if (options.authorId) scope.push(eq(articles.authorId, options.authorId));
+    const draft = sql`${articles.status} = 'draft'`;
+
+    const [row] = await this.db
+      .select({
+        ready: sql<number>`count(*) filter (where ${draft} and ${readinessPredicate('ready')})`,
+        needsExcerpt: sql<number>`count(*) filter (where ${draft} and ${readinessPredicate('needs-excerpt')})`,
+        needsCover: sql<number>`count(*) filter (where ${draft} and ${readinessPredicate('needs-cover')})`,
+        lastPublishedAt: sql<Date | string | null>`max(${articles.publishedAt}) filter (where ${articles.status} = 'published')`,
+      })
+      .from(articles)
+      .where(and(...scope));
+
+    // count() is bigint — a string in node — hence Number(), as in getStats.
+    const last = row?.lastPublishedAt;
+    return {
+      ready: Number(row?.ready ?? 0),
+      needsExcerpt: Number(row?.needsExcerpt ?? 0),
+      needsCover: Number(row?.needsCover ?? 0),
+      lastPublishedAt: last ? new Date(last) : null,
+    };
+  }
+
+  private async publishedRefs(tenantId: TenantId, where: SQL): Promise<PublishedArticleRef[]> {
+    const rows = await this.db
+      .select({
+        id: articles.id,
+        slug: articles.slug,
+        title: articles.title,
+        authorId: articles.authorId,
+        authorName: authors.name,
+        categoryId: articles.categoryId,
+        categoryName: categories.name,
+        categoryDeletedAt: categories.deletedAt,
+        publishedAt: articles.publishedAt,
+      })
+      .from(articles)
+      // Scoped on both sides, as everywhere: an id-only join is how another
+      // tenant's author or category name would surface.
+      .innerJoin(authors, and(eq(authors.id, articles.authorId), eq(authors.tenantId, tenantId)))
+      .leftJoin(categories, and(eq(categories.id, articles.categoryId), eq(categories.tenantId, tenantId)))
+      .where(where)
+      .orderBy(desc(articles.publishedAt));
+
+    return rows.map(r => ({
+      id: r.id,
+      slug: r.slug,
+      title: r.title,
+      authorId: r.authorId,
+      authorName: r.authorName,
+      categoryId: r.categoryName === null ? null : r.categoryId,
+      categoryName: r.categoryName,
+      categoryRetired: r.categoryDeletedAt !== null,
+      // Published rows always carry published_at — the aggregate sets it.
+      publishedAt: r.publishedAt ?? new Date(0),
+    }));
   }
 
   async getStats(tenantId: TenantId, authorId: string): Promise<ArticleStats> {

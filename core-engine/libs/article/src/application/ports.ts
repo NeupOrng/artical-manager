@@ -1,6 +1,7 @@
 import type { TenantId } from '@core/shared';
 import type { PublicAuthorProfile } from '@core/author';
 import type { Article } from '../domain/article';
+import type { Readiness } from '../domain/readiness';
 
 export const ARTICLE_REPOSITORY = Symbol('ARTICLE_REPOSITORY');
 
@@ -81,6 +82,10 @@ export interface ListForAdminOptions {
   status?: 'draft' | 'published';
   /** Restricts to one author's own work. */
   authorId?: string;
+  /** Restricts to one category — the drill-down from the categories page. */
+  categoryId?: string;
+  /** Drafts only, by what blocks publishing — the dashboard pipeline's drill-down. */
+  readiness?: Readiness;
   /** Case-insensitive match on the title. */
   search?: string;
 }
@@ -117,6 +122,32 @@ export interface RecentArticleItem {
   updatedAt: Date;
   authorName: string;
   categoryName: string | null;
+}
+
+/**
+ * A published article as dashboard analytics needs it: enough to label a row
+ * and to group views by author and category. Retired categories keep their
+ * label (admin surface) and are flagged.
+ */
+export interface PublishedArticleRef {
+  id: string;
+  slug: string;
+  title: string;
+  authorId: string;
+  authorName: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  categoryRetired: boolean;
+  publishedAt: Date;
+}
+
+/** Draft counts by what blocks publishing. Blockers overlap — see domain/readiness.ts. */
+export interface PublishingPipeline {
+  ready: number;
+  needsExcerpt: number;
+  needsCover: number;
+  /** Most recent publication in scope; null if nothing is published. */
+  lastPublishedAt: Date | null;
 }
 
 /**
@@ -178,6 +209,22 @@ export interface ArticleRepository {
     tenantId: TenantId,
     articleId: string,
   ): Promise<(AdminArticleListItem & { content: unknown }) | null>;
+
+  // ── Dashboard analytics ────────────────────────────────────────────────────
+
+  /** Published in [from, to), newest first. `authorId` narrows to one author. */
+  publishedBetween(
+    tenantId: TenantId,
+    from: Date,
+    to: Date,
+    options?: { authorId?: string },
+  ): Promise<PublishedArticleRef[]>;
+
+  /** Maps analytics paths back to articles. Published only; unknown slugs are simply absent. */
+  findPublishedBySlugs(tenantId: TenantId, slugs: string[]): Promise<PublishedArticleRef[]>;
+
+  /** Drafts by readiness, plus the last publication. `authorId` narrows to one author. */
+  pipeline(tenantId: TenantId, options?: { authorId?: string }): Promise<PublishingPipeline>;
 
   create(tenantId: TenantId, article: Article): Promise<void>;
 

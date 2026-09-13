@@ -3,5 +3,7 @@ export * from './tenants';
 export * from './authors';
 export * from './platform-admins';
 export * from './categories';
+export * from './category-slug-redirects';
 export * from './articles';
+export * from './article-views';
 export * from './media';

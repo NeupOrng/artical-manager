@@ -65,6 +65,16 @@ only on the internal Docker network. That is not the security boundary — the A
 internet-facing through Kong and must not trust its network — but it removes the
 accidental exposure.
 
+**Umami (readership analytics) is internal-only and has no Kong route.** The API
+forwards views to it on the Docker network and reads reports back; no browser or
+site talks to it. It lives in its own `umami` database on the same Postgres,
+created by the one-shot `umami-db` service (idempotent, unlike init scripts,
+which only run on an empty volume). The image is **pinned — `3.3.1`, no `v`** —
+because the API adapter is written against that version. Dev publishes its UI on
+`127.0.0.1:${UMAMI_PORT}` for inspecting data; production publishes nothing.
+Provision with `task analytics:provision`. Rules and verified API facts:
+`../core-engine/docs/readership-analytics.md`.
+
 ## Layout
 
 ```
@@ -99,6 +109,12 @@ Oathkeeper config lives in `ory/` alongside Kratos once added.
   gateway, and config lives in version control.
 
 ## Kong specifics
+
+**DB-less Kong reads its config only at start.** After changing
+`kong/kong.template.yml`, re-render (`kong-config`) AND restart Kong — a
+re-render alone changes nothing. Found 2026-09-12: Kong had run four weeks on a
+config without the `public-v1-views` route, so no site view was ever recorded.
+`curl localhost:8001/routes` shows what Kong is actually serving.
 
 **Config is a template, not the live file.** `kong/kong.template.yml` is
 committed; the `kong-config` init container substitutes `${VAR}` placeholders
@@ -158,6 +174,7 @@ different provider, not another volume on the same machine:
 | What | How | Why |
 |---|---|---|
 | Postgres | WAL-G or `pg_dump` on a schedule | All content. Irreplaceable. |
+| Postgres `umami` database | same schedule — dump **every** database, not only `artical` | Readership history (sources, devices) that `article_views` does not carry. |
 | MinIO | mirror to external object storage | Images. `og:image` breaks without them. |
 | Redis | volume snapshot + AOF | Kong's ACME certificates. No application data. |
 | Config | git | Whole gateway/identity layer rebuilds from the repo. |
@@ -182,7 +199,8 @@ keeps social previews resolving during downtime.
 ## Monitoring
 
 - **Uptime Kuma** — external checks on each public domain, the admin, and
-  `/health/ready`. Must run somewhere other than the VPS it is watching.
+  `/health/ready`; plus Umami's `/api/heartbeat` from inside the network (down
+  only degrades the dashboard to editorial figures — it never affects sites). Must run somewhere other than the VPS it is watching.
 - **Prometheus + Grafana** — Kong route metrics, API latency, queue depth.
 - **Loki** — logs from all containers.
 

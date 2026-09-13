@@ -1,0 +1,11 @@
+meta { name: Change category slug, type: http, seq: 8 }
+patch { url: {{adminBase}}/categories/{{categoryId}}, body: json, auth: none }
+headers { Cookie: {{sessionCookie}} }
+body:json { { "slug": "kit-and-gear" } }
+docs {
+  Moves the section URL. The old slug is recorded as a redirect in the same
+  transaction, so GET /public/v1/categories/<old> answers
+  { kind: "redirect", slug: "kit-and-gear" } and the sites 301.
+
+  409 CATEGORY_SLUG_TAKEN if a live category already has it.
+}

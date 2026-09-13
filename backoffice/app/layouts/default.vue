@@ -12,12 +12,21 @@ const { data: me } = await useMe()
  * A platform admin has no tenant, so none of these apply to them at all: the
  * API would 403 every one. They get no tabs rather than tabs that fail.
  */
-const TENANT_NAV: { to: string, label: string, icon: IconName, minimum: AuthorRole }[] = [
+const TENANT_NAV: {
+  to: string
+  label: string
+  icon: IconName
+  minimum: AuthorRole
+  /** Active only on this exact path — see the tab markup below. */
+  exact?: boolean
+}[] = [
+  { to: '/', label: 'Dashboard', icon: 'dashboard', minimum: 'contributor', exact: true },
   { to: '/articles', label: 'Articles', icon: 'article', minimum: 'contributor' },
   { to: '/categories', label: 'Categories', icon: 'category', minimum: 'editor' },
-  { to: '/media', label: 'Media', icon: 'media', minimum: 'contributor' },
   { to: '/authors', label: 'Authors', icon: 'author', minimum: 'admin' },
 ]
+
+const ACTIVE_TAB = '!border-accent !text-fg font-medium'
 
 const RANK: Record<AuthorRole, number> = { contributor: 1, editor: 2, admin: 3 }
 
@@ -185,8 +194,13 @@ onMounted(() => {
             <NuxtLink
               :to="item.to"
               class="group flex items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-2.5 pb-2.5 pt-1 text-[0.8125rem] text-fg-muted transition-colors hover:text-fg"
-              active-class="!border-accent !text-fg font-medium"
+              :active-class="item.exact ? '' : ACTIVE_TAB"
+              :exact-active-class="ACTIVE_TAB"
             >
+              <!-- Two classes because `active-class` is a PREFIX match: every
+                   path starts with "/", so the Dashboard tab would light up on
+                   every page. Exact tabs use only the exact match; section tabs
+                   stay active on their sub-pages (/articles/:id). -->
               <AppIcon :name="item.icon" :size="14" class="opacity-70 group-hover:opacity-100" />
               {{ item.label }}
             </NuxtLink>

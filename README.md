@@ -26,11 +26,14 @@ deliberately rather than by default, and the reasoning is recorded there.
 task setup          # copies .env files from .example, installs deps
 ```
 
-**Now edit `infrastructure/env/.env` before going further.** It is created from the
-example with placeholder values, and two of them matter on the first run:
+`infrastructure/env/.env` is created from the example and **works as-is on a
+laptop** — including the default logins listed under
+[Default logins](#default-logins--local-dev-only). Before anything is reachable from
+outside your machine, change:
 
-- `SUPER_ADMIN_PASSWORD` — must be **at least 12 characters**, and Kratos checks it
-  against HaveIBeenPwned, so a common password is rejected and admin seeding fails.
+- `SUPER_ADMIN_PASSWORD` — ships as a published dev default. A replacement must be
+  **at least 12 characters**, and Kratos checks it against HaveIBeenPwned and against
+  the username, so a common or look-alike password is rejected and seeding fails.
 - `TECH_TENANT_KEY` / `GAMING_TENANT_KEY` — the public sites authenticate to the
   gateway with these. They work as `replace-me` on a laptop because both sides read
   the same file, but generate real ones before anything is reachable from outside:
@@ -40,7 +43,7 @@ python3 -c "import secrets;print(secrets.token_urlsafe(32))"
 ```
 
 The Ory secrets (`KRATOS_COOKIE_SECRET`, `KRATOS_CIPHER_SECRET`, `HYDRA_SYSTEM_SECRET`)
-also ship as `replace-me`. Fine locally, not fine anywhere else. Generate each one
+and Umami's `UMAMI_APP_SECRET` / `UMAMI_ADMIN_PASSWORD` also ship as dev values. Fine locally, not fine anywhere else. Generate each one
 separately — never reuse a secret across services.
 
 Then:
@@ -50,8 +53,16 @@ task dev            # everything: backend stack + both tenant sites
 ```
 
 `task dev` brings up the containers, waits for the datastores, applies migrations, and
-seeds tenants, articles, the super admin, and the dev authors. **The first run installs
-dependencies inside the containers and takes several minutes.**
+seeds tenants, articles, the super admin, and the dev authors, and connects each site to
+readership analytics. **The first run installs dependencies inside the containers and
+takes several minutes.**
+
+The dashboard's readership panels are empty on a fresh database. For something to look
+at, seed 90 days of synthetic views (dev only; `-- --reset` replaces them):
+
+```bash
+task db:seed:views
+```
 
 ### What you get
 
@@ -65,15 +76,42 @@ dependencies inside the containers and takes several minutes.**
 | gaming-site | http://localhost:3200 |
 | MinIO console | http://localhost:9001 |
 | Mail catcher (dev) | http://localhost:4436 |
+| Umami — raw readership data, dev only (`admin` / `artical-dev-umami-2026`) | http://127.0.0.1:3300 |
 
-### First login
+### Default logins — local dev only
 
-Go to http://localhost:3001/auth/login and sign in with `SUPER_ADMIN_USERNAME` and
-`SUPER_ADMIN_PASSWORD` from `infrastructure/env/.env`.
+Sign in at http://localhost:3001/auth/login. `task dev` seeds all five accounts:
+
+| Account | Username | Password | What you see |
+|---|---|---|---|
+| Platform admin | `superadmin` | `artical-dev-platform-2026` | Every site, aggregate counts only — no article access, by design |
+| Technology Site author (`admin` role) | `mara-okonkwo` | `seed-author-password-2026` | Technology Site articles, categories, media |
+| Gaming Site author (`admin` role) | `devin-hartley` | `seed-author-password-2026` | Gaming Site articles, categories, media |
+| Technology Site contributor | `nina-sato` | `seed-author-password-2026` | Writes and edits; **cannot** publish, delete, or manage categories |
+| Gaming Site contributor | `leo-marsh` | `seed-author-password-2026` | Writes and edits; **cannot** publish, delete, or manage categories |
 
 **Log in with the username, not the email.** Email is contact information and a
 recovery delivery address in this system — it is never a credential. See
 [CLAUDE.md](CLAUDE.md) §5.
+
+Things worth knowing about these accounts:
+
+- **These passwords are public — this repo is public.** They exist to save the next
+  developer ten minutes, not to protect anything. Never let them reach an
+  environment someone else can reach. `task db:seed:admin` refuses the super admin
+  default when `NODE_ENV=production`.
+- **Each author sees only their own site.** Signed in as `mara-okonkwo` you will
+  never see a Gaming Site article, and vice versa. That is tenant isolation working,
+  and two browser profiles — one per author — is the quickest way to test it.
+- **The super admin password is fixed at first seed.** It comes from
+  `SUPER_ADMIN_PASSWORD` in `infrastructure/env/.env`, but re-running the seed adopts
+  the existing identity rather than resetting its password. If you set up before
+  this default existed, your password is still whatever that file held then.
+- The author password comes from `SEED_AUTHOR_PASSWORD`, defaulting to the value
+  above. The contributors exist to test the role split: signed in as `nina-sato`
+  the Publish button and the Categories tab are gone, and the API refuses those
+  calls with 403 even if you craft them by hand — the hidden button is a courtesy,
+  the API is the control.
 
 There is no self-service registration. Authors are provisioned by an admin, and an
 identity with no matching `Author` row gets a 403 rather than being auto-created.

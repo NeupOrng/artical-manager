@@ -1,0 +1,8 @@
+meta { name: Refusal — duplicate slug, type: http, seq: 3 }
+post { url: {{adminBase}}/categories, body: json, auth: none }
+headers { Cookie: {{sessionCookie}} }
+body:json { { "name": "News" } }
+docs {
+  Expect 409 CATEGORY_SLUG_TAKEN. Checked before writing so the caller gets a
+  typed domain error rather than a raw Postgres unique violation as a 500.
+}

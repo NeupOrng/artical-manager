@@ -75,6 +75,8 @@ export interface TenantSummary {
   authorCount: number
   publishedCount: number
   draftCount: number
+  /** Article views over the last 30 UTC days. Null = analytics not set up, or unavailable. */
+  views30d: number | null
 }
 
 export interface PlatformDashboard {
@@ -93,8 +95,141 @@ export interface PlatformDashboard {
  */
 export type Dashboard = AuthorDashboard | PlatformDashboard
 
+/* ── GET /admin/v1/dashboard/analytics ─────────────────────────────────────── */
+
+export type AnalyticsRange = '7d' | '30d' | '90d'
+
+export interface Delta {
+  current: number
+  previous: number
+}
+
+export interface TopArticle {
+  articleId: string
+  title: string
+  slug: string
+  authorName: string
+  categoryName: string | null
+  /** ISO 8601 UTC. */
+  publishedAt: string
+  views: number
+  /** Views per day, aligned to `readership.daily`. */
+  daily: number[]
+}
+
+export interface CategoryShare {
+  /** Null = uncategorised. */
+  categoryId: string | null
+  name: string
+  retired: boolean
+  views: number
+  /** Fraction of article views; the list sums to 1. */
+  share: number
+}
+
+export interface AuthorActivity {
+  authorId: string
+  name: string
+  published: number
+  /** Null unless readership is ok. */
+  views: number | null
+}
+
+export interface PublishingPipeline {
+  ready: number
+  /** Blockers overlap: a draft missing both is counted in both. */
+  needsExcerpt: number
+  needsCover: number
+  lastPublishedAt: string | null
+}
+
+/**
+ * `not-connected` and `unavailable` are NOT errors — the response is a 200 and
+ * the editorial half is intact. Render it regardless.
+ */
+export type Readership =
+  | { status: 'not-connected' | 'unavailable' }
+  | {
+    status: 'ok'
+    views: Delta
+    /** Null for contributors ("mine"). */
+    visitors: Delta | null
+    /** Null until an article has a complete first week in the range. */
+    firstWeekViewsPerNewArticle: number | null
+    /** Dense, one entry per local day. */
+    daily: { date: string, views: number }[]
+    topArticles: TopArticle[]
+    byCategory: CategoryShare[]
+    /** Null for contributors ("mine"). */
+    sources: { source: string, views: number }[] | null
+  }
+
+export interface DashboardAnalytics {
+  range: AnalyticsRange
+  /** The viewer's IANA zone the days were cut in. */
+  timezone: string
+  /** "mine" for contributors: their own articles only. */
+  scope: 'site' | 'mine'
+  current: { from: string, to: string }
+  previous: { from: string, to: string }
+  editorial: {
+    published: Delta
+    publishedByDay: { date: string, count: number }[]
+    pipeline: PublishingPipeline
+  }
+  /** Null for contributors. Sorted by name, deliberately unranked. */
+  authors: AuthorActivity[] | null
+  readership: Readership
+}
+
+/**
+ * A tenant's taxonomy entry. `GET /admin/v1/categories[?include=retired]`
+ *
+ * `articleCount` is how many articles are filed here, any status — drafts
+ * included, so an editor deciding whether to retire a section sees everything
+ * that would lose it, not only what readers can see.
+ */
+export interface Category {
+  id: string
+  name: string
+  /** The public URL segment, `/category/:slug`. Changing it leaves a redirect. */
+  slug: string
+  /** Section summary for the site page and its meta description. Often null. */
+  description: string | null
+  /** Ascending nav order. Retired rows keep a stale value — ignore it. */
+  position: number
+  articleCount: number
+  /** ISO 8601 UTC. Null while live. */
+  retiredAt: string | null
+}
+
+export interface CategoryList {
+  /** Nav order, live first; retired ones only when `include=retired`. */
+  data: Category[]
+}
+
+export interface CategoryInput {
+  name: string
+  slug?: string
+  description?: string
+}
+
+/** PATCH semantics: omitted fields are untouched, `description: null` clears. */
+export interface CategoryPatch {
+  name?: string
+  slug?: string
+  description?: string | null
+}
+
 /** What still blocks publishing. Computed by the aggregate, never by the UI. */
 export type PublishBlocker = 'excerpt' | 'coverImage'
+
+/**
+ * `?readiness=` on the article list: drafts by what blocks publishing. Blockers
+ * overlap — a draft missing both appears under both. The totals match the
+ * dashboard pipeline exactly, because both come from one domain rule.
+ */
+export type Readiness = 'ready' | 'needs-excerpt' | 'needs-cover'
 
 export interface ArticleListItem {
   id: string
@@ -138,6 +273,11 @@ export type ApiErrorCode =
   | 'ARTICLE_EMPTY_TITLE'
   | 'ARTICLE_UNSLUGGABLE_TITLE'
   | 'ARTICLE_NOT_FOUND'
+  | 'CATEGORY_NOT_FOUND'
+  | 'CATEGORY_NAME_EMPTY'
+  | 'CATEGORY_NAME_UNSLUGGABLE'
+  | 'CATEGORY_SLUG_TAKEN'
+  | 'CATEGORY_ORDER_STALE'
 
 /**
  * The single error envelope, produced by the API's exception filter.

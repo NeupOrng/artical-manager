@@ -63,7 +63,10 @@ defineProps<{ article: ArticleListItem }>()
           -->
           <p class="mt-2 flex items-center gap-2 text-[0.82rem] text-muted">
             <AuthorAvatar :name="article.authorName" :avatar-url="article.authorAvatarUrl" size="sm" class="!size-6 !text-[0.6rem]" />
-            {{ article.authorName }}
+            <span class="min-w-0 truncate">{{ article.authorName }}</span>
+            <!-- Pushed to the trailing edge: the byline is the primary meta,
+                 the count is a secondary signal and should not compete. -->
+            <ViewCount :article-id="article.id" class="ml-auto shrink-0 text-faint" />
           </p>
         </div>
       </div>

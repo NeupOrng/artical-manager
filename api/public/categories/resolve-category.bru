@@ -1,0 +1,15 @@
+meta { name: Resolve category slug, type: http, seq: 2 }
+get { url: {{publicBase}}/categories/reviews, body: none, auth: none }
+headers { X-Tenant-Key: {{techTenantKey}} }
+docs {
+  What /category/:slug on a site should do.
+
+    { "kind": "category", "name": "Reviews", "slug": "reviews", "description": null }
+    { "kind": "redirect", "slug": "kit-and-gear" }   — renamed; the site 301s
+    404 CATEGORY_NOT_FOUND                           — no such section; the site 404s
+
+  The redirect is in the BODY, not an HTTP 301, because the sites call this
+  with $fetch server-side, which follows redirects silently.
+
+  Retired sections 404. So do redirects pointing at a retired section.
+}

@@ -128,7 +128,15 @@ describe('a platform admin', () => {
         'name',
         'nicheLabel',
         'publishedCount',
+        // Added 2026-09-12, deliberately: readership over 30 days — an
+        // aggregate like the counts above, never titles or content.
+        'views30d',
       ]);
+      // Null when the site has no analytics website or Umami is down — both
+      // must leave the rest of this screen working.
+      for (const t of dash.tenants) {
+        expect(t.views30d === null || typeof t.views30d === 'number').toBe(true);
+      }
     },
   );
 });

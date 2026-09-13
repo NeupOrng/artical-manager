@@ -117,6 +117,11 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET}
       MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL:-http://localhost:9000}
+      # Readership analytics. Deliberately NOT a depends_on: the API must start
+      # and serve with Umami down — analytics then reports "unavailable".
+      UMAMI_URL: http://umami:3000
+      UMAMI_USERNAME: ${UMAMI_ADMIN_USERNAME}
+      UMAMI_PASSWORD: ${UMAMI_ADMIN_PASSWORD}
     ports:
       - '${API_PORT:-3000}:3000'
     healthcheck:
@@ -344,6 +349,59 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # Readership analytics — docs/proposals/dashboard-analytics-umami.md.
+  #
+  # Internal only. The API forwards views to it and reads reports from it; no
+  # browser and no site ever talks to it, and production publishes no port. If
+  # it is down the dashboard degrades to editorial figures and nothing else
+  # notices — article_views in the content database stays the authoritative log.
+  umami-db:
+    image: postgres:17-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+    # Its own DATABASE, like the Ory services (see ../postgres/init): Umami runs
+    # its own migrations and must never share tables with content. A one-shot
+    # container rather than an init script because init scripts only run on an
+    # EMPTY data directory, and every existing volume predates this service.
+    entrypoint: >
+      /bin/sh -c "
+      psql -tAc \"SELECT 1 FROM pg_database WHERE datname = 'umami'\" | grep -q 1 ||
+      psql -c 'CREATE DATABASE umami' &&
+      echo 'umami database ready'
+      "
+    restart: 'no'
+
+  umami:
+    # PINNED. The API's Umami adapter is written against this version's
+    # /api/send and report endpoints. Bump deliberately and re-run the adapter
+    # contract test (core-engine/test/integration).
+    image: ghcr.io/umami-software/umami:3.3.1
+    restart: unless-stopped
+    depends_on:
+      umami-db:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET}
+      DISABLE_TELEMETRY: 1
+      DISABLE_UPDATES: 1
+    # Dev only, loopback only — to look at the raw data in Umami's own UI.
+    # Editors never use that UI: it knows nothing of our roles or tenants.
+    ports:
+      - '127.0.0.1:${UMAMI_PORT:-3300}:3000'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/heartbeat >/dev/null 2>&1 || curl -fsS http://127.0.0.1:3000/api/heartbeat >/dev/null || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
 volumes:
   kong-config:

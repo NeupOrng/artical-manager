@@ -31,6 +31,8 @@
       "@core/author/*": ["libs/author/src/*"],
       "@core/platform-admin": ["libs/platform-admin/src"],
       "@core/platform-admin/*": ["libs/platform-admin/src/*"],
+      "@core/category": ["libs/category/src"],
+      "@core/category/*": ["libs/category/src/*"],
       "@core/database": ["libs/database/src"],
       "@core/database/*": ["libs/database/src/*"],
       "@core/shared": ["libs/shared/src"],

@@ -49,13 +49,17 @@ there means "does not apply", not "unknown". Shapes in `api-reference.md`.
 ```
 GET    /public/v1/articles                 list published, paginated   [BUILT]
 GET    /public/v1/articles/:slug           one published article       [BUILT]
-GET    /public/v1/categories               tenant taxonomy
+GET    /public/v1/categories               tenant taxonomy, nav order         [BUILT]
+GET    /public/v1/categories/:slug         resolve: category | redirect | 404 [BUILT]
+POST   /public/v1/views                    count a read; forwards to Umami    [BUILT]
+GET    /public/v1/views?articleIds=        totals for a card grid             [BUILT]
 GET    /public/v1/categories/:slug/articles
 GET    /public/v1/preview/:id              signed token required, any status
 
 GET    /admin/v1/me                         the current principal            [BUILT]
 GET    /admin/v1/dashboard                  summary, shape per principal    [BUILT]
-GET    /admin/v1/articles                   list, any status, filterable    [BUILT]
+GET    /admin/v1/dashboard/analytics        ?range&tz — readership + editorial [BUILT]
+GET    /admin/v1/articles                   list, any status, filterable (+ ?readiness) [BUILT]
 POST   /admin/v1/articles                   create a draft                  [BUILT]
 GET    /admin/v1/articles/:id               with content                    [BUILT]
 PATCH  /admin/v1/articles/:id               partial; never touches status   [BUILT]
@@ -67,7 +71,12 @@ POST   /admin/v1/media/:id/confirm          → records the row, queues nothing 
 GET    /admin/v1/media                      library, paginated                   [BUILT]
 GET    /admin/v1/media/:id                  poll for processing status           [BUILT]
 DELETE /admin/v1/media/:id                  soft delete                          [BUILT]
-GET    /admin/v1/categories  …
+GET    /admin/v1/categories                 live (+ retired on ?include=retired) [BUILT]
+POST   /admin/v1/categories                 editor+                          [BUILT]
+PATCH  /admin/v1/categories/:id             rename / change slug, editor+    [BUILT]
+DELETE /admin/v1/categories/:id             soft delete, editor+             [BUILT]
+POST   /admin/v1/categories/:id/restore     un-retire to end of nav, editor+ [BUILT]
+POST   /admin/v1/categories/reorder         whole nav order, editor+         [BUILT]
 GET    /admin/v1/authors     …
 GET    /health/live  /health/ready
 ```
@@ -172,6 +181,17 @@ contract in `websites/CLAUDE.md` already carries the mechanism. **Not built.**
 This is also why the Kong cache makes the opt-in look broken during local
 testing: flip the flag, re-request, and you get the previous body for 60s. Add a
 cache-busting query parameter before concluding the code is wrong.
+
+## Caching lag on public reads
+
+`/public/v1/*` is proxy-cached by Kong (60s) and again by each site's Nitro
+layer (300s for categories). **Category edits are not immediate** — a rename or
+a retire takes up to ~6 minutes to reach a reader.
+
+That is fine for navigation and wrong for anything an editor expects to confirm
+visually. If it ever needs to be instant, the fix is an explicit cache purge on
+write, not a shorter TTL: shortening it multiplies backend load on the hottest
+endpoint to fix a rare event.
 
 ## Versioning
 

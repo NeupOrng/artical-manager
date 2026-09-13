@@ -22,6 +22,7 @@ relevant one first; don't infer these rules from existing code.
 | `docs/background-work.md` | touching the worker or polled background work |
 | `docs/media-and-uploads.md` | touching uploads, MinIO, or image URLs |
 | `docs/database-and-migrations.md` | changing the schema |
+| `docs/readership-analytics.md` | touching view recording, dashboard analytics, or Umami |
 
 ---
 
@@ -63,12 +64,13 @@ One `package.json`, one `nest-cli.json`, one `tsconfig` with path aliases at the
 root of this directory. `apps/api` and `apps/worker` build from the same source tree
 via a single `Dockerfile` (`--build-arg APP=api|worker`).
 
-**Current state:** `database`, `shared`, `tenant`, `article`, `media` and `author`
-have code and are registered in `nest-cli.json` / `tsconfig` paths /
-`vitest.config.ts`. `category` is still an empty directory — register it (a
-`projects` entry plus a `@core/<name>` alias, and the Vitest alias) when it gets
-its first file. An empty lib registered early breaks the build, since it has no
-`index.ts`.
+**Current state:** every bounded-context lib now has code and is registered in
+`nest-cli.json`, `tsconfig` paths and `vitest.config.ts` — `tenant`, `author`,
+`article`, `category`, `media`, plus `database` and `shared`. When adding a new
+one, register it only once it has an `index.ts`: an empty lib registered early
+breaks the build.
+
+Readership also lives in `article` (no sixth context): the `ReadershipAnalytics` port and `buildDashboardAnalytics` use case in `application/`, and `infrastructure/umami-readership.analytics.ts` — the ONLY file that knows it is Umami. See `docs/readership-analytics.md`.
 
 `author` is deliberately thin: no aggregate, because a profile has no state
 machine. What it does own is the contact-visibility projection
@@ -127,8 +129,8 @@ layout is what makes it visible and lintable.
 
 ### Intentional asymmetry
 
-`article` and `media` are the substantial contexts and get the full treatment. `category`,
-`media`, `tenant`, and `author` are close to CRUD — they keep the same folders for
+`article` and `media` are the substantial contexts and get the full treatment.
+`category`, `tenant`, and `author` are close to CRUD — they keep the same folders for
 consistency, but **do not manufacture aggregates or domain events for them.** Empty
 ceremony is worse than no ceremony. If `category/domain/` only ever holds a type
 alias and a slug validator, that is the correct outcome.
@@ -230,6 +232,11 @@ Detail and test requirements in `docs/tenant-isolation.md`.
 ---
 
 ## Conventions
+
+- **Slugs** — `slugify` lives in `@core/shared`, not in a context. An article
+  slug and a category slug must obey a byte-identical rule, because both end up
+  as public URLs; two definitions of "valid URL" is how they drift.
+
 
 - **Errors** — domain throws typed errors from `libs/shared/src/errors`; one
   exception filter maps them to HTTP. Controllers never throw `HttpException`.

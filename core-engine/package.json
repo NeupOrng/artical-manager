@@ -27,6 +27,8 @@
     "db:seed": "tsx libs/database/src/seed/index.ts",
     "db:seed:admin": "tsx libs/database/src/seed/platform-admin.ts",
     "db:seed:authors": "tsx libs/database/src/seed/authors.ts",
+    "analytics:provision": "tsx libs/database/src/seed/analytics.ts",
+    "db:seed:views": "tsx libs/database/src/seed/views.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {

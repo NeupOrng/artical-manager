@@ -43,6 +43,25 @@ useSeoMeta({
 })
 
 useHead({ link: [{ rel: 'canonical', href: canonical }] })
+
+/**
+ * Record the read — same as technology-site.
+ *
+ * `onMounted` and not awaited: this must never sit in the render path. The page
+ * is ISR-cached, so a server-side call here would count cache regenerations
+ * rather than readers, and a failed call must not affect the article at all.
+ * `watch` with `immediate`, so a client-side navigation between two articles
+ * records the second one too.
+ */
+const recordView = useRecordArticleView()
+
+onMounted(() => {
+  watch(
+    () => article.value?.id,
+    (id) => { if (id) void recordView(id) },
+    { immediate: true },
+  )
+})
 </script>
 
 <template>

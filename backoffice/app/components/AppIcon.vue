@@ -13,6 +13,10 @@
  * carry exports, and other components need to name an icon in their own props.
  */
 export type IconName =
+  | 'dashboard'
+  | 'trend-up'
+  | 'trend-down'
+  | 'check-circle'
   | 'article'
   | 'category'
   | 'media'
@@ -51,6 +55,13 @@ const props = withDefaults(
 
 /** Path data only — the wrapper owns sizing, stroke, and colour. */
 const PATHS: Record<IconName, string> = {
+  // A rising and a falling line with an arrowhead — period comparisons.
+  'trend-up': 'M2.5 11.5 6.5 7.5 9 10l4.5-4.5M10 5.5h3.5V9',
+  'trend-down': 'M2.5 4.5l4 4L9 6l4.5 4.5M10 10.5h3.5V7',
+  // A tick in a circle — "ready".
+  'check-circle': 'M8 14A6 6 0 1 0 8 2a6 6 0 0 0 0 12ZM5.6 8.1l1.7 1.7 3.1-3.3',
+  // Four panels: one tall, one short, mirrored.
+  dashboard: 'M3.5 2.5h3a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1ZM9.5 2.5h3a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-1a1 1 0 0 1 1-1ZM9.5 7.5h3a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1ZM3.5 10.5h3a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-1a1 1 0 0 1 1-1Z',
   // A page with lines of text.
   article: 'M4 2.5h5.5L12 5v8.5H4zM9.5 2.5V5H12M6 8h4M6 10.5h4',
   // A tag.

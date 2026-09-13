@@ -1,0 +1,2 @@
+ALTER TABLE "tenants" ADD COLUMN "umami_website_id" uuid;--> statement-breakpoint
+CREATE UNIQUE INDEX "tenants_umami_website_key" ON "tenants" USING btree ("umami_website_id") WHERE "tenants"."umami_website_id" is not null;

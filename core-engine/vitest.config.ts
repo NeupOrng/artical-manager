@@ -18,6 +18,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@core/shared': resolve(__dirname, 'libs/shared/src'),
+      '@core/category': resolve(__dirname, 'libs/category/src'),
       '@core/database': resolve(__dirname, 'libs/database/src'),
       '@core/media': resolve(__dirname, 'libs/media/src'),
       '@core/tenant': resolve(__dirname, 'libs/tenant/src'),

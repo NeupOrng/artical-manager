@@ -10,4 +10,6 @@ export interface Tenant {
   readonly name: string;
   readonly domain: string;
   readonly nicheLabel: string;
+  /** Umami website for readership analytics; null = not provisioned. */
+  readonly umamiWebsiteId: string | null;
 }

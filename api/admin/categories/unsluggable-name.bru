@@ -1,0 +1,8 @@
+meta { name: Refusal — unsluggable name, type: http, seq: 4 }
+post { url: {{adminBase}}/categories, body: json, auth: none }
+headers { Cookie: {{sessionCookie}} }
+body:json { { "name": "!!! ???" } }
+docs {
+  Expect 422 CATEGORY_NAME_UNSLUGGABLE. A name with nothing sluggable would
+  produce the URL /category/ — a 404 the editor cannot diagnose.
+}

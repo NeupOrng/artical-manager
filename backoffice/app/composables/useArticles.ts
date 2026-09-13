@@ -1,4 +1,4 @@
-import type { ArticleDetail, ArticleList, ArticleStatus } from '~/types/api'
+import type { Readiness, ArticleDetail, ArticleList, ArticleStatus } from '~/types/api'
 
 /**
  * The article admin surface.
@@ -16,6 +16,10 @@ export interface ArticleFilters {
   status?: ArticleStatus
   search?: string
   authorId?: string
+  /** Drill-down from the categories page. */
+  categoryId?: string
+  /** Drill-down from the dashboard pipeline. */
+  readiness?: Readiness
 }
 
 export function useArticleList(filters: Ref<ArticleFilters>) {
@@ -33,6 +37,8 @@ export function useArticleList(filters: Ref<ArticleFilters>) {
           status: filters.value.status,
           search: filters.value.search || undefined,
           authorId: filters.value.authorId,
+          categoryId: filters.value.categoryId,
+          readiness: filters.value.readiness,
         },
       }),
     // Re-runs on any filter change. A plain object here would capture the value

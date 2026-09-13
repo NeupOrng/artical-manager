@@ -83,6 +83,66 @@ services:
           vary_headers: ['X-Consumer-Custom-ID']
 
   # ---------------------------------------------------------------------------
+  # Public WRITE surface — currently one endpoint: recording an article view.
+  #
+  # A SEPARATE service, not `methods: [POST]` added to public-v1 above. Two
+  # reasons, both of which matter:
+  #
+  #   1. The public read surface stays read-only AT THE GATEWAY. Adding POST to
+  #      the /public/v1 route would allow POST to every public path, so a future
+  #      controller gaining a write handler would become internet-writable
+  #      without anyone deciding that. Here the allowed path is one literal.
+  #
+  #   2. Writes need a much tighter rate limit than reads, and plugins attach
+  #      per service. A reader legitimately fetches dozens of pages a minute;
+  #      nobody legitimately records dozens of views a minute.
+  #
+  # NO proxy-cache here — caching a write is meaningless, and the paired GET on
+  # /public/v1/views is served by the read service above where the 60s TTL is
+  # the right amount of staleness for a counter.
+  #
+  # This counter is INDICATIVE, NOT AUDITED. The endpoint is anonymous by
+  # necessity (the tenant key must never reach a browser), so rate limiting
+  # bounds abuse rather than preventing it. See the note on
+  # apps/api/src/modules/public/public-views.controller.ts.
+  # ---------------------------------------------------------------------------
+  - name: public-write-api
+    url: http://api:3000
+    routes:
+      - name: public-v1-views
+        paths:
+          - /public/v1/views
+        strip_path: false
+        methods: [POST, OPTIONS]
+    plugins:
+      - name: key-auth
+        config:
+          key_names: ['X-Tenant-Key']
+          key_in_header: true
+          key_in_query: false
+          key_in_body: false
+          hide_credentials: true
+
+      # Deliberately far tighter than the read route's 300/minute. A reader
+      # opening articles back to back is normal; this is one write per article
+      # per session, so a real visitor sends a handful an hour.
+      - name: rate-limiting
+        config:
+          minute: 60
+          hour: 600
+          policy: local
+          limit_by: consumer
+          fault_tolerant: true
+
+      # Same reasoning as the read route: this path bypasses Oathkeeper, so a
+      # client could otherwise simply send an identity header.
+      - name: request-transformer
+        config:
+          remove:
+            headers:
+              - X-Kratos-Identity-Id
+
+  # ---------------------------------------------------------------------------
   # Admin surface. A SEPARATE service, not another route on public-api —
   # plugins attach at the service level, so sharing one would apply
   # proxy-cache to admin responses. That bites immediately: polling an

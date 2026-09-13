@@ -1,0 +1,8 @@
+meta { name: List categories, type: http, seq: 1 }
+get { url: {{adminBase}}/categories, body: none, auth: none }
+headers { Cookie: {{sessionCookie}} }
+docs {
+  Live categories with usage counts. articleCount spans ALL statuses — an
+  editor deciding whether to retire a section needs to know about drafts too.
+  Contributor and above.
+}

@@ -1,0 +1,11 @@
+meta { name: Restore category, type: http, seq: 9 }
+post { url: {{adminBase}}/categories/{{categoryId}}/restore, body: none, auth: none }
+headers { Cookie: {{sessionCookie}} }
+docs {
+  Brings a retired category back, at the END of the nav. Articles never lost
+  their category_id, so they reappear under it as they were.
+
+  Idempotent: restoring a live category returns it unchanged.
+  409 CATEGORY_SLUG_TAKEN if a live category took the slug in the meantime —
+  change that one's slug first. Cross-tenant ids 404.
+}

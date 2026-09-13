@@ -117,6 +117,9 @@ export function api(
 export const SEED = {
   techAuthor: 'mara-okonkwo',
   gamingAuthor: 'devin-hartley',
+  /** Contributor role: may write, may NOT publish, delete, or manage categories. */
+  techContributor: 'nina-sato',
+  gamingContributor: 'leo-marsh',
   techTenantId: '0198f000-0000-7000-8000-000000000001',
   gamingTenantId: '0198f000-0000-7000-8000-000000000002',
   /** Exists in BOTH tenants — that is what makes it useful for isolation tests. */

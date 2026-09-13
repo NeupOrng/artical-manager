@@ -1,0 +1,11 @@
+meta { name: Retire category (soft delete), type: http, seq: 6 }
+delete { url: {{adminBase}}/categories/{{categoryId}}, body: none, auth: none }
+headers { Cookie: {{sessionCookie}} }
+docs {
+  Soft delete. Articles keep their category_id AND their label, so nothing
+  already published changes; the section just stops being offered in pickers
+  and stops appearing in public nav.
+
+  The slug becomes reusable immediately — the unique index is partial
+  (WHERE deleted_at IS NULL), so recreating the same name succeeds.
+}

@@ -22,6 +22,19 @@ const { update, publish, unpublish, remove } = useArticleActions()
 const { parse } = useApiError()
 const { data: me } = await useMe()
 const { relative, absolute } = useRelativeTime()
+const { categories } = useCategories()
+
+/**
+ * The article's saved category when it is NOT in the live list — i.e. retired.
+ * Built from the article response (which keeps retired labels on purpose), so
+ * no second request is needed.
+ */
+const retiredCurrent = computed(() => {
+  const a = article.value
+  if (!a?.categoryId) return null
+  if (categories.value.some(c => c.id === a.categoryId)) return null
+  return { id: a.categoryId, name: a.categoryName ?? 'Retired category' }
+})
 
 const EMPTY_DOC = { type: 'doc', content: [] }
 
@@ -31,6 +44,8 @@ const form = reactive({
   slug: '',
   excerpt: '',
   coverImage: '',
+  /** Empty string is the "no category" option — see the select below. */
+  categoryId: '',
   /** TipTap document, held as an object — the editor owns its shape. */
   content: EMPTY_DOC as unknown,
 })
@@ -40,6 +55,7 @@ const hydrate = (a: ArticleDetail) => {
   form.slug = a.slug
   form.excerpt = a.excerpt ?? ''
   form.coverImage = a.coverImage ?? ''
+  form.categoryId = a.categoryId ?? ''
   form.content = a.content ?? EMPTY_DOC
 }
 
@@ -76,6 +92,7 @@ const isDirty = computed(() => {
     || form.slug !== a.slug
     || form.excerpt !== (a.excerpt ?? '')
     || form.coverImage !== (a.coverImage ?? '')
+    || form.categoryId !== (a.categoryId ?? '')
     || JSON.stringify(form.content) !== JSON.stringify(a.content ?? EMPTY_DOC)
   )
 })
@@ -95,6 +112,12 @@ async function save() {
     // Only send the slug when it changed. Sending it unchanged on a published
     // article would trip the slug lock for no reason.
     if (form.slug !== article.value.slug) body.slug = form.slug
+    // Likewise the category: an article may sit in a category retired since it
+    // was chosen, and re-sending that id asks the API to validate a choice
+    // nobody made. '' is the "no category" option; the API takes null to clear.
+    if (form.categoryId !== (article.value.categoryId ?? '')) {
+      body.categoryId = form.categoryId || null
+    }
 
     await update(id.value, body)
     await refresh()
@@ -324,6 +347,43 @@ useHead({ title: () => `${article.value?.title ?? 'Article'} · Artical` })
         <!-- Metadata. A sidebar because these are set once and then left alone,
              while the title and body are worked on continuously. -->
         <aside class="space-y-4 rounded-lg border border-border bg-panel p-4">
+          <label class="block">
+            <span class="text-[0.8125rem] font-medium">Category</span>
+            <!--
+              A native <select>. The taxonomy is a handful of entries, so a
+              custom listbox would add keyboard and screen-reader surface for
+              nothing — and this is the one control an author touches on a
+              phone, where the native picker is strictly better.
+            -->
+            <select
+              v-model="form.categoryId"
+              class="mt-1.5 w-full rounded-md border border-border bg-bg px-3 py-2 text-[0.8125rem] transition-colors hover:border-border-strong focus:border-accent"
+            >
+              <!-- Uncategorised is a real, reachable state: category_id is
+                   nullable and publishing does not require one. -->
+              <option value="">
+                Uncategorised
+              </option>
+              <option v-for="c in categories" :key="c.id" :value="c.id">
+                {{ c.name }} ({{ c.articleCount }})
+              </option>
+              <!-- The article's current category, when it has been retired.
+                   The picker only lists live ones, so without this the select
+                   would have no matching option and render blank — reading as
+                   "Uncategorised" when the article is still filed elsewhere. -->
+              <option v-if="retiredCurrent" :value="retiredCurrent.id" disabled>
+                {{ retiredCurrent.name }} (retired)
+              </option>
+            </select>
+            <span v-if="retiredCurrent && form.categoryId === retiredCurrent.id" class="mt-1 block text-xs text-fg-muted">
+              This category was retired. The article no longer appears under it on
+              the site; pick another to re-file it.
+            </span>
+            <span v-else-if="!categories.length" class="mt-1 block text-xs text-fg-subtle">
+              This site has no categories yet.
+            </span>
+          </label>
+
           <label class="block">
             <span class="text-[0.8125rem] font-medium">Excerpt</span>
             <textarea

@@ -88,6 +88,8 @@ tasks:
       - task: db:seed
       - task: db:seed:admin
       - task: db:seed:authors
+      # Idempotent: connects each site to readership analytics (Umami).
+      - task: analytics:provision
       - echo ""
       - echo "  Gateway         http://localhost:${KONG_PROXY_PORT:-8000}"
       - echo "  API             http://localhost:${API_PORT:-3000}"
@@ -97,6 +99,7 @@ tasks:
       - echo "  backoffice      http://localhost:3001"
       - echo "  technology-site http://localhost:${TECH_SITE_PORT:-3100}"
       - echo "  gaming-site     http://localhost:${GAMING_SITE_PORT:-3200}"
+      - echo "  Umami (dev)     http://127.0.0.1:${UMAMI_PORT:-3300}   seed views -> task db:seed:views"
       - echo ""
       - 'echo "  sign in as ${SUPER_ADMIN_USERNAME} — password is in infrastructure/env/.env"'
       - echo ""
@@ -210,6 +213,29 @@ tasks:
       KRATOS_ADMIN_URL: http://localhost:{{.KRATOS_ADMIN_PORT | default "4434"}}
     cmds:
       - pnpm run db:seed:authors
+
+  analytics:provision:
+    desc: Connect each tenant to readership analytics (one Umami website per tenant)
+    dir: '{{.CORE}}'
+    # A bootstrap step, like db:seed:admin: idempotent, and it rotates Umami's
+    # first-boot password to UMAMI_ADMIN_PASSWORD. Umami is loopback-published
+    # in dev only. See docs/proposals/dashboard-analytics-umami.md.
+    env:
+      UMAMI_URL: http://localhost:{{.UMAMI_PORT | default "3300"}}
+    cmds:
+      - pnpm run analytics:provision
+
+  db:seed:views:
+    desc: 'Dev only: 90 days of synthetic readership for the dashboard (add -- --reset to replace)'
+    dir: '{{.CORE}}'
+    # Sends backdated views through the real Umami ingest path and writes the
+    # matching article_views rows, so both stores tell the same story. Refuses
+    # production. Needs `task analytics:provision` first. --reset recreates the
+    # Umami websites; never use Umami's own reset — it hides backdated events.
+    env:
+      UMAMI_URL: http://localhost:{{.UMAMI_PORT | default "3300"}}
+    cmds:
+      - pnpm run db:seed:views -- {{.CLI_ARGS}}
 
   db:studio:
     desc: Open Drizzle Studio

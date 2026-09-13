@@ -24,3 +24,25 @@ export async function publicApi<T>(
     query,
   }) as T
 }
+
+/**
+ * POST variant, for the one public write the sites make: recording a view.
+ *
+ * Same rule as above — the tenant key never leaves the server, so the browser
+ * posts to this site's own /api/* route and this forwards it.
+ */
+export async function publicApiPost<T>(
+  path: string,
+  body: Record<string, unknown>,
+  headers: Record<string, string> = {},
+): Promise<T> {
+  const config = useRuntimeConfig()
+
+  return await $fetch<T>(path, {
+    method: 'POST',
+    baseURL: `${config.apiBaseUrl}/public/v1`,
+    // The tenant key last, so no caller-supplied header can replace it.
+    headers: { ...headers, 'X-Tenant-Key': config.tenantKey },
+    body,
+  }) as T
+}

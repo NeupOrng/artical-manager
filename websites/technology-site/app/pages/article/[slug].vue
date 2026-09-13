@@ -45,6 +45,27 @@ useSeoMeta({
 })
 
 useHead({ link: [{ rel: 'canonical', href: canonical }] })
+
+/**
+ * Record the read.
+ *
+ * `onMounted` and not awaited: this must never sit in the render path. The page
+ * is ISR-cached, so a server-side call here would count cache regenerations
+ * rather than readers, and a failed call must not affect the article at all.
+ *
+ * `watch` with `immediate` rather than a bare call, so a client-side navigation
+ * between two articles records the second one too — `onMounted` alone fires
+ * once for the whole page component.
+ */
+const recordView = useRecordArticleView()
+
+onMounted(() => {
+  watch(
+    () => article.value?.id,
+    (id) => { if (id) void recordView(id) },
+    { immediate: true },
+  )
+})
 </script>
 
 <template>
@@ -96,6 +117,9 @@ useHead({ link: [{ rel: 'canonical', href: canonical }] })
         <time :datetime="isoDate(article.publishedAt)" class="text-[0.9rem] text-muted">
           {{ formatDate(article.publishedAt) }}
         </time>
+
+        <span class="text-faint" aria-hidden="true">·</span>
+        <ViewCount :article-id="article.id" size="md" class="text-muted" />
       </div>
     </header>
 

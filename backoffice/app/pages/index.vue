@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { AnalyticsRange } from '~/types/api'
+
 /**
  * The dashboard. Two genuinely different screens behind one route, chosen by
  * principal kind.
@@ -7,11 +9,74 @@
  * no articles, and a "0 published" tile would state something false. The
  * correct answer is that the question does not apply to them.
  *
- * The TABLE is the page. The figures above it are reference values on the way
- * down, deliberately quiet — see StatFigure.
+ * For authors the page answers, top to bottom: how is it reading (figures and
+ * the daily chart), what is reading (articles, sections, sources), and what is
+ * ready to go (pipeline) — then the recent work. Readership comes from
+ * analytics and may be missing; the editorial half never is. See
+ * docs/proposals/dashboard-analytics-umami.md.
  */
+const route = useRoute()
+const router = useRouter()
 const { data: dashboard, error, status, refresh } = await useDashboard()
 const { relative, absolute } = useRelativeTime()
+
+/** The range lives in the URL, like the article filters: shareable, survives refresh. */
+const RANGES: AnalyticsRange[] = ['7d', '30d', '90d']
+const range = computed<AnalyticsRange>({
+  get: () => {
+    const q = route.query.range as AnalyticsRange
+    return RANGES.includes(q) ? q : '30d'
+  },
+  set: value => router.replace({ query: { ...route.query, range: value === '30d' ? undefined : value } }),
+})
+const PERIOD: Record<AnalyticsRange, { prior: string, last: string }> = {
+  '7d': { prior: 'prior 7 days', last: 'last 7 days' },
+  '30d': { prior: 'prior 30 days', last: 'last 30 days' },
+  '90d': { prior: 'prior 90 days', last: 'last 90 days' },
+}
+
+const isAuthor = computed(() => dashboard.value?.kind === 'author')
+const {
+  data: analytics,
+  status: analyticsStatus,
+  error: analyticsError,
+  refresh: refreshAnalytics,
+} = useDashboardAnalytics(range, isAuthor)
+
+/** Contributors see their own work — known from the role before analytics loads. */
+const isMine = computed(() => dashboard.value?.kind === 'author' && dashboard.value.role === 'contributor')
+
+const readership = computed(() => {
+  const r = analytics.value?.readership
+  return r?.status === 'ok' ? r : null
+})
+
+/** One word for what the readership panels should show. */
+const readershipState = computed<'loading' | 'ok' | 'not-connected' | 'unavailable'>(() => {
+  if (analyticsError.value) return 'unavailable'
+  if (!analytics.value) return analyticsStatus.value === 'pending' || analyticsStatus.value === 'idle' ? 'loading' : 'unavailable'
+  return analytics.value.readership.status
+})
+
+const draftTotal = computed(() =>
+  dashboard.value?.kind === 'author'
+    ? (isMine.value ? dashboard.value.mine.draft : dashboard.value.articles.draft)
+    : 0)
+
+const categoryItems = computed(() =>
+  (readership.value?.byCategory ?? []).map(c => ({
+    key: c.categoryId ?? 'uncategorised',
+    label: c.name,
+    value: c.views,
+    share: c.share,
+    note: c.retired ? 'retired' : undefined,
+  })))
+
+const sourceItems = computed(() => {
+  const sources = readership.value?.sources ?? []
+  const total = sources.reduce((t, s) => t + s.views, 0) || 1
+  return sources.map(s => ({ key: s.source, label: s.source, value: s.views, share: s.views / total }))
+})
 
 useHead({ title: 'Dashboard · Artical' })
 </script>
@@ -52,40 +117,145 @@ useHead({ title: 'Dashboard · Artical' })
 
     <!-- ───────────────────────────── Tenant author ───────────────────────── -->
     <template v-else-if="dashboard?.kind === 'author'">
-      <h1 class="text-xl font-semibold">
-        {{ dashboard.tenantName }}
-      </h1>
-      <p class="mt-1 text-[0.8125rem] text-fg-muted">
-        Everything written for this site, most recently edited first.
-      </p>
+      <header class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-semibold">
+            {{ isMine ? 'Your stories' : dashboard.tenantName }}
+          </h1>
+          <p class="mt-1 text-[0.8125rem] text-fg-muted">
+            <template v-if="isMine">
+              How your articles on {{ dashboard.tenantName }} are reading.
+            </template>
+            <template v-else>
+              How the site is reading, and what is ready to go.
+            </template>
+          </p>
+        </div>
+        <RangeTabs v-model="range" />
+      </header>
 
-      <dl class="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-4">
+      <dl class="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border lg:grid-cols-4">
+        <StatFigure
+          class="bg-panel"
+          label="Views"
+          :value="readership?.views.current ?? null"
+          :delta="readership?.views ?? null"
+          :period="PERIOD[range].prior"
+          :hint="readershipState === 'loading' ? 'Loading…' : readershipState === 'ok' ? undefined : 'Analytics not available'"
+        />
         <StatFigure
           class="bg-panel"
           label="Published"
-          :value="dashboard.articles.published"
+          :value="analytics?.editorial.published.current ?? null"
+          :delta="analytics?.editorial.published ?? null"
+          :period="PERIOD[range].prior"
         />
         <StatFigure
           class="bg-panel"
-          label="Drafts"
-          :value="dashboard.articles.draft"
-          hint="Across all authors"
+          label="Views per new article"
+          :value="readership?.firstWeekViewsPerNewArticle ?? null"
+          :hint="readership && readership.firstWeekViewsPerNewArticle === null
+            ? 'Needs an article at least a week old'
+            : 'In its first 7 days'"
         />
         <StatFigure
           class="bg-panel"
-          label="Yours"
-          :value="dashboard.mine.total"
-          :hint="`${dashboard.mine.draft} unfinished`"
-        />
-        <StatFigure
-          class="bg-panel"
-          label="Media"
-          :value="dashboard.mediaCount"
+          label="Ready to publish"
+          :value="analytics?.editorial.pipeline.ready ?? null"
+          :hint="`Of ${draftTotal} ${draftTotal === 1 ? 'draft' : 'drafts'}`"
         />
       </dl>
 
-      <section class="mt-8">
-        <h2 class="text-[0.9375rem] font-semibold">
+      <!-- The daily chart. The one place the page shows change over time. -->
+      <section class="mt-4 rounded-lg border border-border bg-panel p-4" aria-labelledby="views-heading">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="views-heading" class="text-[0.8125rem] font-semibold">
+            Views per day
+          </h2>
+          <span v-if="readership" class="flex items-center gap-1.5 text-xs text-fg-subtle">
+            <span class="inline-block size-2 rounded-full bg-fg" aria-hidden="true" />
+            Article published
+          </span>
+        </div>
+
+        <div class="mt-3">
+          <div v-if="readershipState === 'loading'" class="h-44 animate-pulse rounded-md bg-bg-sunken" />
+          <AnalyticsNotice
+            v-else-if="readershipState === 'not-connected' || readershipState === 'unavailable'"
+            :status="readershipState"
+            @retry="refreshAnalytics()"
+          />
+          <ViewsChart
+            v-else-if="readership && analytics"
+            :days="readership.daily"
+            :published="analytics.editorial.publishedByDay"
+          />
+        </div>
+
+        <p v-if="readership && analytics" class="mt-3 text-xs text-fg-subtle">
+          Days in {{ analytics.timezone }}. Views are counted once per article per
+          browser session and filtered for bots, so they can differ slightly from
+          the count shown on the site.
+        </p>
+      </section>
+
+      <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+        <!-- What is reading. -->
+        <section class="self-start rounded-lg border border-border bg-panel" aria-labelledby="top-heading">
+          <h2 id="top-heading" class="px-4 pb-2 pt-3.5 text-[0.8125rem] font-semibold">
+            Top articles <span class="font-normal text-fg-subtle">· {{ PERIOD[range].last }}</span>
+          </h2>
+          <div v-if="readershipState === 'loading'" class="mx-4 mb-4 h-40 animate-pulse rounded-md bg-bg-sunken" />
+          <p v-else-if="!readership" class="px-4 pb-4 text-[0.8125rem] text-fg-muted">
+            Appears once view analytics are available.
+          </p>
+          <TopArticles v-else :articles="readership.topArticles" />
+        </section>
+
+        <div class="grid content-start gap-4">
+          <section class="rounded-lg border border-border bg-panel p-4" aria-labelledby="category-heading">
+            <h2 id="category-heading" class="mb-3 text-[0.8125rem] font-semibold">
+              Views by category
+            </h2>
+            <div v-if="readershipState === 'loading'" class="h-24 animate-pulse rounded-md bg-bg-sunken" />
+            <p v-else-if="!readership" class="text-[0.8125rem] text-fg-muted">
+              Appears once view analytics are available.
+            </p>
+            <ShareBars v-else :items="categoryItems" empty-text="No article views in this period." />
+          </section>
+
+          <!-- Site-wide only: sources cannot be split per author honestly. -->
+          <section v-if="!isMine" class="rounded-lg border border-border bg-panel p-4" aria-labelledby="sources-heading">
+            <h2 id="sources-heading" class="mb-3 text-[0.8125rem] font-semibold">
+              Top sources
+            </h2>
+            <div v-if="readershipState === 'loading'" class="h-24 animate-pulse rounded-md bg-bg-sunken" />
+            <p v-else-if="!readership" class="text-[0.8125rem] text-fg-muted">
+              Appears once view analytics are available.
+            </p>
+            <ShareBars v-else :items="sourceItems" empty-text="No views in this period." />
+          </section>
+
+          <!-- Editorial: always available, analytics or not. -->
+          <section class="rounded-lg border border-border bg-panel p-4" aria-labelledby="pipeline-heading">
+            <h2 id="pipeline-heading" class="mb-2 text-[0.8125rem] font-semibold">
+              {{ isMine ? 'Your drafts' : 'Publishing pipeline' }}
+            </h2>
+            <div v-if="!analytics" class="h-24 animate-pulse rounded-md bg-bg-sunken" />
+            <PipelineList v-else :pipeline="analytics.editorial.pipeline" :mine="isMine" />
+          </section>
+
+          <section v-if="analytics?.authors" class="rounded-lg border border-border bg-panel p-4" aria-labelledby="authors-heading">
+            <h2 id="authors-heading" class="mb-2 text-[0.8125rem] font-semibold">
+              Authors <span class="font-normal text-fg-subtle">· {{ PERIOD[range].last }}</span>
+            </h2>
+            <AuthorsPanel :authors="analytics.authors" />
+          </section>
+        </div>
+      </div>
+
+      <section class="mt-8" aria-labelledby="recent-heading">
+        <h2 id="recent-heading" class="text-[0.9375rem] font-semibold">
           Recently edited
         </h2>
 
@@ -119,14 +289,18 @@ useHead({ title: 'Dashboard · Artical' })
             </thead>
             <tbody>
               <tr
-                v-for="article in dashboard.recent"
+                v-for="article in dashboard.recent.slice(0, 5)"
                 :key="article.id"
                 class="border-b border-border transition-colors last:border-b-0 hover:bg-bg-subtle"
               >
                 <td class="px-4 py-2.5">
-                  <span class="block max-w-md truncate font-medium" :title="article.title">
+                  <NuxtLink
+                    :to="`/articles/${article.id}`"
+                    class="block max-w-md truncate font-medium underline-offset-2 hover:text-accent hover:underline"
+                    :title="article.title"
+                  >
                     {{ article.title }}
-                  </span>
+                  </NuxtLink>
                   <!-- The slug is an identifier, so it is mono. That is the
                        whole rule for mono in this app. -->
                   <span class="mt-0.5 block max-w-md truncate font-mono text-xs text-fg-subtle">
@@ -194,6 +368,7 @@ useHead({ title: 'Dashboard · Artical' })
               <th scope="col" class="px-4 py-2.5 text-end font-medium">Authors</th>
               <th scope="col" class="px-4 py-2.5 text-end font-medium">Published</th>
               <th scope="col" class="px-4 py-2.5 text-end font-medium">Drafts</th>
+              <th scope="col" class="px-4 py-2.5 text-end font-medium">Views · 30 days</th>
             </tr>
           </thead>
           <tbody>
@@ -225,6 +400,14 @@ useHead({ title: 'Dashboard · Artical' })
               <td class="tnum px-4 py-2.5 text-end text-fg-muted">{{ tenant.authorCount }}</td>
               <td class="tnum px-4 py-2.5 text-end">{{ tenant.publishedCount }}</td>
               <td class="tnum px-4 py-2.5 text-end text-fg-muted">{{ tenant.draftCount }}</td>
+              <!-- An aggregate like the counts beside it. A dash, not zero, when
+                   analytics is not set up — "unknown" must not read as "none". -->
+              <td
+                class="tnum px-4 py-2.5 text-end"
+                :title="tenant.views30d === null ? 'View analytics are not set up for this site, or are unavailable' : undefined"
+              >
+                {{ tenant.views30d === null ? '—' : tenant.views30d.toLocaleString() }}
+              </td>
             </tr>
           </tbody>
         </table>

@@ -58,6 +58,7 @@ Do not build any of the above unless explicitly asked.
 ```
 /CLAUDE.md          This file — requirements and decisions
 /api                Bruno API collection (admin + public endpoints, environments)
+/docs/proposals     Approved plans not yet built — history once built (see §10)
 /core-engine        NestJS monorepo — apps/api, apps/worker, libs/ (backend only)
 /backoffice         Nuxt backoffice UI (referred to as `/admin` in older notes)
 /websites           One Nuxt SSR project per tenant public site
@@ -83,7 +84,7 @@ This is a deliberate split and it drives several rules below.
 
 | Component | Where | Why |
 |---|---|---|
-| `core-engine` (API, worker, Postgres, Redis, MinIO, Kratos, Kong) | **One VPS**, Docker Compose, offsite backups | Persistent processes; low traffic; no need for horizontal scale |
+| `core-engine` (API, worker, Postgres, Redis, MinIO, Kratos, Kong, Umami) | **One VPS**, Docker Compose, offsite backups | Persistent processes; low traffic; no need for horizontal scale |
 | `admin` | Managed host (Vercel-style) | Low traffic, ~10 authors |
 | `websites/*` | Managed host (Vercel-style), ISR + edge cache | Read traffic is the only thing that scales on a content site |
 
@@ -205,7 +206,11 @@ Author
   role [admin|editor|contributor]
 
 Category
-  id, tenant_id (FK), name, slug                  — tenant-scoped taxonomy
+  id, tenant_id (FK), name, slug,                 — tenant-scoped taxonomy
+  description, position, deleted_at              — nav order; soft delete (retire)
+
+CategorySlugRedirect
+  tenant_id, old_slug → category_id              — a changed slug 301s, UNIQUE (tenant_id, old_slug)
 
 Article
   id, tenant_id (FK), author_id (FK), title, slug, content (TipTap block JSON),
@@ -263,6 +268,7 @@ See `core-engine/docs/article-status-lifecycle.md` for the status state machine.
 | Rich text editor | TipTap (Vue build) |
 | Media storage | MinIO (S3-compatible), presigned direct upload |
 | Image processing | sharp — og/card/thumb WebP derivatives, worker-side |
+| Readership analytics | Umami 3.3.1, self-hosted, internal-only — see `core-engine/docs/readership-analytics.md` |
 | Gateway | Kong Gateway OSS, DB-less declarative config |
 | Edge auth | Ory Oathkeeper |
 | Identity | Ory Kratos |
@@ -279,7 +285,9 @@ Strapi (→ custom NestJS + Nuxt admin) · Next.js/React (→ Nuxt/Vue, preferen
 Prisma/TypeORM (→ Drizzle, preference) · Passport.js JWT (→ Kratos + edge
 enforcement) · Caddy/Traefik (→ Kong, for multi-tenant custom-domain TLS) ·
 Vercel for the backend (persistent worker + always-on services don't fit) ·
-Kong `openid-connect` plugin (Enterprise-only).
+Kong `openid-connect` plugin (Enterprise-only) · Plausible CE / PostHog /
+OpenPanel for analytics (→ Umami; each needs ClickHouse, too heavy for one VPS)
+· hand-written view aggregation SQL (→ Umami, 2026-09-12).
 
 ---
 
@@ -293,13 +301,25 @@ Do not implement these without asking.
    per-category homepage preview blocks, ad/banner slots, treating PR/sponsored
    as its own category. Two of these have schema consequences that are cheap now
    and impossible to retrofit:
-   - *Recording* article views from launch (ranking UI can come later — the data
-     cannot be backfilled)
+   - *Recording* article views from launch — **built** on technology-site
+     (`article_views` + `article_view_counts`); gaming-site records nothing
+     yet. Analysis is decided — Umami, see below.
    - An `is_sponsored` flag on Article (disclosure is a field, not a taxonomy row)
 3. Whether the two sites' homepages diverge enough to justify separate layouts.
 
 ### Decided, previously open
 
+- **Readership analytics via Umami — decided 2026-09-12, built 2026-09-13.** Umami
+  (self-hosted, MIT, on the existing Postgres in its own `umami` database, no
+  public surface) computes readership for the backoffice dashboard. Views are
+  forwarded server-side through `POST /public/v1/views` — no analytics script
+  on the sites. `article_views` stays the authoritative raw log, written first;
+  Umami is a derived store behind a port, so it can be replaced. Editorial
+  figures (publishing pace, pipeline, authors, categories) stay in our database.
+  Confirmed the same day: the reader-facing counter stays on our table; the
+  authors panel is editor+, by name, unranked; every site records views; time
+  is stored UTC and shown in the backoffice viewer's own time zone. Full plan:
+  `docs/proposals/dashboard-analytics-umami.md`.
 - **Author bio card — decided 2026-08-07, built.** Authors have a public profile
   (`username`, `quote`, contact details) surfaced as a byline on listings, an
   end-of-article card, and an author page at `/author/:username`. Contact details
@@ -322,6 +342,8 @@ Do not implement these without asking.
 | `websites/*/CLAUDE.md` | Per-tenant domain knowledge |
 | `infrastructure/CLAUDE.md` | Compose topology, gateway/identity config, backups, monitoring |
 | `/api` | Bruno collection — the live shape of every endpoint |
+| `docs/proposals/` | Approved plans not yet built. Read the relevant one before implementing it; once built, the docs it names become the source of truth. None open — `dashboard-analytics-umami.md` is built and kept as history. |
+| `core-engine/docs/readership-analytics.md` | View recording, dashboard analytics, Umami: the two stores, isolation, verified API facts, operating tasks |
 
 ---
 

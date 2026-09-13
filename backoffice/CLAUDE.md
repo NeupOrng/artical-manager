@@ -98,18 +98,22 @@ at the root — Nitro is not part of `srcDir`.
 ```
 app/
   pages/
-    index.vue     dashboard
+    index.vue     dashboard: readership + editorial analytics (see below)
     auth/         Kratos flows: login, recovery, verification, settings
     articles/     list + editor, publish/unpublish, delete
-    categories/   tenant taxonomy management                   — not built
+    categories/   tenant taxonomy: create, edit, reorder, retire, restore
     media/        library                                      — not built
     authors/      admin/editor only                            — not built
   layouts/        default (nav + session), auth (bare)
   middleware/     auth.global.ts — cosmetic redirect, not a permission check
-  composables/    useMe, useDashboard, useArticles, useMediaUpload,
-                  useKratosFlow, useApiError, useRelativeTime
+  composables/    useMe, useDashboard, useDashboardAnalytics, useArticles,
+                  useCategories, useMediaUpload, useKratosFlow, useApiError,
+                  useRelativeTime
   components/     ArticleEditor, CoverImageField, KratosForm, StatusPill,
-                  StatFigure, AppIcon
+                  StatFigure, AppIcon, RangeTabs, ViewsChart, Sparkline,
+                  ShareBars, TopArticles, PipelineList, AuthorsPanel,
+                  AnalyticsNotice
+  plugins/        viewer-timezone.client.ts — the viewer's zone for dashboard days
   types/api.ts    hand-written from core-engine/docs/api-reference.md
   assets/ plugins/
 server/
@@ -121,9 +125,61 @@ public/
 
 ## What exists today
 
-Login and the four Kratos flows, the dashboard, and **articles end to end** —
+Login and the four Kratos flows, the dashboard, **articles end to end** —
 list, create, edit, publish/unpublish, delete — with a TipTap editor and real
-image uploads. Categories, media library, and author management are not built.
+image uploads — **categories** and the **analytics dashboard** (below). Media
+library and author management are not built.
+
+## Categories
+
+`/categories` is editor+ (the nav hides it from contributors; the API enforces
+it). What is managed there is, directly, each site's navigation, so the page
+says what an action does to the site *before* it happens:
+
+- **Order is nav order.** Up/down buttons send the WHOLE live order; the API
+  refuses a stale one (409 `CATEGORY_ORDER_STALE`) and the page reloads the list.
+- **A slug change warns that the URL moves.** The old slug keeps working as a
+  301, so this is a correction, not a breakage.
+- **Retire confirms in place with the article count, drafts included.** It is
+  reversible: articles keep their `category_id`; Restore brings it back last in
+  the nav.
+- API error codes land next to the field they are about. Map codes, never
+  parse messages.
+
+The article editor's picker lists live categories only. An article filed under
+a since-retired one shows it as a disabled "(retired)" option, and the save
+sends `categoryId` **only when it changed** — re-sending a retired id used to
+make those articles unsaveable. Article counts link to `/articles?categoryId=`.
+
+## Dashboard
+
+`/` answers, top to bottom: how is it reading (figures + daily chart), what is
+reading (top articles, categories, sources), what is ready to go (pipeline), and
+recent work. Two sources, and the page never confuses them:
+
+- **Editorial figures** (published, pipeline, authors) come from our database and
+  always render.
+- **Readership** comes from Umami via `GET /admin/v1/dashboard/analytics` and may
+  be `not-connected` or `unavailable` — both are 200s. `AnalyticsNotice` says so
+  quietly and the editorial half still renders. Never show zeros for "unknown":
+  `StatFigure` renders `null` as an em dash.
+
+Rules worth keeping:
+
+- **Scope is the API's decision.** Contributors get "Your stories" (their own
+  articles, no authors panel, no sources). The heading follows the role; the
+  data follows the API's `scope`. Hiding panels is cosmetic.
+- **Days are the viewer's.** `plugins/viewer-timezone.client.ts` writes the
+  browser zone to the `artical_tz` cookie + `useViewerTimeZone()` state; the
+  composable sends it as `tz` and refetches once if SSR rendered a different zone.
+- **Charts are hand-drawn SVG, no library** (proposal decision M5). `ViewsChart`
+  is keyboard-explorable (arrow keys, announced readout) and carries a hidden
+  data table; keep both if you change it.
+- **The authors panel is sorted by name and unranked** — a decision, not an
+  oversight (D3).
+- Pipeline rows link to `/articles?readiness=…`; the counts and the filtered
+  list come from one domain rule and must agree.
+- Derive with `computed`, not `watch` — watchers do not run during SSR.
 
 ## The editor's extension set is a platform contract
 

@@ -38,6 +38,14 @@ export const envSchema = z.object({
   MEDIA_PUBLIC_BASE_URL: z.string().url(),
   MEDIA_PRESIGN_TTL_SECONDS: z.coerce.number().int().positive().default(300),
 
+  /**
+   * Readership analytics (Umami). All three OPTIONAL on purpose: without them
+   * the API still boots and serves, and the dashboard reports analytics as
+   * "not-connected". Internal URL only (umami:3000) — it is never public.
+   */
+  UMAMI_URL: z.string().url().optional(),
+  UMAMI_USERNAME: z.string().optional(),
+  UMAMI_PASSWORD: z.string().optional(),
 
   /** Swagger is served in non-production only. */
   SWAGGER_ENABLED: z

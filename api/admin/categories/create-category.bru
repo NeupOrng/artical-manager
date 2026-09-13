@@ -1,0 +1,5 @@
+meta { name: Create category, type: http, seq: 2 }
+post { url: {{adminBase}}/categories, body: json, auth: none }
+headers { Cookie: {{sessionCookie}} }
+body:json { { "name": "Hardware Reviews" } }
+docs { Slug is derived from the name unless one is supplied. Editor and above. }

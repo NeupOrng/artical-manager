@@ -23,6 +23,7 @@ export class DrizzleTenantRepository implements TenantRepository {
       name: row.name,
       domain: row.domain,
       nicheLabel: row.nicheLabel,
+      umamiWebsiteId: row.umamiWebsiteId,
     };
   }
 
@@ -52,6 +53,7 @@ export class DrizzleTenantRepository implements TenantRepository {
           name: tenants.name,
           domain: tenants.domain,
           nicheLabel: tenants.nicheLabel,
+          umamiWebsiteId: tenants.umamiWebsiteId,
         })
         .from(tenants)
         .orderBy(tenants.name),
@@ -94,6 +96,7 @@ export class DrizzleTenantRepository implements TenantRepository {
       authorCount: authorsByTenant.get(row.id) ?? 0,
       publishedCount: articlesByTenantStatus.get(`${row.id}:published`) ?? 0,
       draftCount: articlesByTenantStatus.get(`${row.id}:draft`) ?? 0,
+      umamiWebsiteId: row.umamiWebsiteId,
     }));
   }
 }

@@ -1,0 +1,12 @@
+meta { name: Dashboard analytics, type: http, seq: 2 }
+get { url: {{adminBase}}/dashboard/analytics?range=30d&tz=Asia/Phnom_Penh, body: none, auth: none }
+headers { Cookie: {{sessionCookie}} }
+docs {
+  Readership (Umami) + editorial analytics. tz is the VIEWER's IANA zone — it
+  decides where days begin. Editors/admins get scope "site"; a contributor gets
+  scope "mine" (own articles only, authors null, visitors/sources null).
+  Platform admins get 403 — their figure is views30d on GET /dashboard.
+
+  readership.status: "ok" | "not-connected" (run `task analytics:provision`)
+  | "unavailable" (Umami down). Both non-ok states are 200 with editorial intact.
+}

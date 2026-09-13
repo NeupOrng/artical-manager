@@ -28,8 +28,14 @@ import {
   Article,
   ArticleNotFoundError,
   DuplicateSlugError,
+  missingToPublishFrom,
   type ArticleRepository,
 } from '@core/article';
+import {
+  CATEGORY_REPOSITORY,
+  CategoryNotFoundError,
+  type CategoryRepository,
+} from '@core/category';
 import {
   asArticleId,
   asAuthorId,
@@ -66,6 +72,7 @@ import {
 export class ArticlesController {
   constructor(
     @Inject(ARTICLE_REPOSITORY) private readonly repo: ArticleRepository,
+    @Inject(CATEGORY_REPOSITORY) private readonly categories: CategoryRepository,
   ) {}
 
   @Get()
@@ -81,6 +88,8 @@ export class ArticlesController {
       perPage: query.perPage,
       status: query.status,
       authorId: query.authorId,
+      categoryId: query.categoryId,
+      readiness: query.readiness,
       search: query.search,
     });
 
@@ -130,6 +139,8 @@ export class ArticlesController {
     @CurrentAuthor() author: AuthorPrincipal,
     @Body() dto: CreateArticleDto,
   ): Promise<ArticleDetailDto> {
+    await this.assertCategoryBelongsToTenant(author, dto.categoryId);
+
     // The aggregate decides the slug, so the derivation rule lives in one place.
     const article = Article.createDraft({
       id: newId<ArticleId>(),
@@ -163,6 +174,15 @@ export class ArticlesController {
     @Body() dto: UpdateArticleDto,
   ): Promise<ArticleDetailDto> {
     const article = await this.load(author, articleId);
+
+    // Only a CHANGED category is validated. The editor re-sends the article's
+    // current categoryId on every save, and that category may have been retired
+    // since it was chosen — validating it anyway made every such article
+    // impossible to save, even for a one-word title fix (reproduced).
+    const currentCategoryId = article.toProps().categoryId;
+    if (dto.categoryId !== undefined && dto.categoryId !== currentCategoryId) {
+      await this.assertCategoryBelongsToTenant(author, dto.categoryId);
+    }
 
     // Every change goes through the aggregate — it enforces the empty-title and
     // published-slug rules, and it is the only thing that may touch status.
@@ -304,6 +324,37 @@ export class ArticlesController {
     return article;
   }
 
+  /**
+   * A categoryId arrives from the CLIENT, so it has to be proved to belong to
+   * the caller's tenant before it is stored.
+   *
+   * The database will not do this for us: the foreign key on
+   * `articles.category_id` references `categories.id` and knows nothing about
+   * tenancy, so Postgres accepts another tenant's category id without
+   * complaint. Verified before this check existed — a technology article
+   * happily stored a gaming category and the request returned 200.
+   *
+   * `findById` is tenant-scoped AND excludes retired categories, so this also
+   * stops an article being filed under a section that was soft-deleted.
+   *
+   * NOT FOUND rather than forbidden, deliberately: a 403 would confirm the id
+   * exists somewhere else, which is the same leak that makes cross-tenant
+   * article reads 404. docs/tenant-isolation.md.
+   */
+  private async assertCategoryBelongsToTenant(
+    author: AuthorPrincipal,
+    categoryId: string | null | undefined,
+  ): Promise<void> {
+    // undefined = not supplied (PATCH), null = clear it. Neither needs a check.
+    if (!categoryId) return;
+
+    const found = await this.categories.findById(
+      author.tenantId,
+      asCategoryId(categoryId),
+    );
+    if (!found) throw new CategoryNotFoundError(categoryId);
+  }
+
   private async assertSlugFree(
     author: AuthorPrincipal,
     slug: string,
@@ -323,9 +374,8 @@ function missingFrom(item: {
   excerpt: string | null
   coverImage: string | null
 }): ('excerpt' | 'coverImage')[] {
-  const missing: ('excerpt' | 'coverImage')[] = [];
-  if (!item.excerpt) missing.push('excerpt');
-  if (!item.coverImage) missing.push('coverImage');
-  return missing;
+  // The domain's definition, not a copy of it — the same one the pipeline
+  // counts and the readiness filter follow.
+  return missingToPublishFrom(item);
 }
 

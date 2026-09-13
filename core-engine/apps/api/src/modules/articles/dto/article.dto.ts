@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { READINESS_VALUES, type Readiness } from '@core/article';
 import {
   IsIn,
   IsInt,
@@ -45,6 +46,22 @@ export class ListArticlesQuery {
   @IsOptional()
   @IsUUID()
   authorId?: string;
+
+  @ApiPropertyOptional({ description: 'Restrict to one category. Tenant-scoped like every filter.' })
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
+
+  @ApiPropertyOptional({
+    enum: READINESS_VALUES,
+    description:
+      'Drafts only, by what still blocks publishing. Blockers overlap: a draft '
+      + 'missing both appears under needs-excerpt AND needs-cover. The totals '
+      + 'match the dashboard pipeline exactly.',
+  })
+  @IsOptional()
+  @IsIn(READINESS_VALUES)
+  readiness?: Readiness;
 
   @ApiPropertyOptional({ description: 'Case-insensitive match on the title.' })
   @IsOptional()

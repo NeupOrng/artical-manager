@@ -90,6 +90,15 @@
       "compilerOptions": {
         "tsConfigPath": "libs/media/tsconfig.lib.json"
       }
+    },
+    "category": {
+      "type": "library",
+      "root": "libs/category",
+      "entryFile": "index",
+      "sourceRoot": "libs/category/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/category/tsconfig.lib.json"
+      }
     }
   }
 }

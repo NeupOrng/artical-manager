@@ -159,6 +159,78 @@ describe('tenant isolation', () => {
   });
 });
 
+describe('category assignment is tenant-scoped', () => {
+  let articleId: string;
+  let ownCategoryId: string;
+  let foreignCategoryId: string;
+
+  beforeAll(async () => {
+    articleId = (await json<ArticleBody>(await createDraft({ title: 'Category Scope Probe' }))).id;
+    created.push(articleId);
+
+    const own = await json<{ data: { id: string }[] }>(
+      await api('/admin/v1/categories', { cookie }),
+    );
+    const foreign = await json<{ data: { id: string }[] }>(
+      await api('/admin/v1/categories', { cookie: gamingCookie }),
+    );
+    ownCategoryId = own.data[0]!.id;
+    foreignCategoryId = foreign.data[0]!.id;
+  });
+
+  it('accepts a category from the caller\'s own tenant', async () => {
+    const res = await api(`/admin/v1/articles/${articleId}`, {
+      method: 'PATCH',
+      cookie,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categoryId: ownCategoryId }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("404s ANOTHER tenant's category id", async () => {
+    // The foreign key on articles.category_id references categories.id and
+    // knows nothing about tenancy, so Postgres accepts this happily. Before the
+    // controller checked, this returned 200 and stored a gaming category on a
+    // technology article.
+    //
+    // 404 rather than 403: a 403 would confirm the id exists somewhere else.
+    const res = await api(`/admin/v1/articles/${articleId}`, {
+      method: 'PATCH',
+      cookie,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categoryId: foreignCategoryId }),
+    });
+    expect(res.status).toBe(404);
+    expect((await json<ErrorBody>(res)).error.code).toBe('CATEGORY_NOT_FOUND');
+
+    // And the article kept the category it already had.
+    const after = await json<ArticleBody & { categoryId: string | null }>(
+      await api(`/admin/v1/articles/${articleId}`, { cookie }),
+    );
+    expect(after.categoryId).toBe(ownCategoryId);
+  });
+
+  it('refuses a foreign category at CREATE time too', async () => {
+    const res = await createDraft({
+      title: 'Category Scope Probe At Create',
+      categoryId: foreignCategoryId,
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('allows clearing the category', async () => {
+    const res = await api(`/admin/v1/articles/${articleId}`, {
+      method: 'PATCH',
+      cookie,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categoryId: null }),
+    });
+    expect(res.status).toBe(200);
+    expect((await json<{ categoryId: string | null }>(res)).categoryId).toBeNull();
+  });
+});
+
 describe('publishing', () => {
   let id: string;
 
