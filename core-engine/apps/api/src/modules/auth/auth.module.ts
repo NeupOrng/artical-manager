@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
-import { AUTHOR_REPOSITORY, DrizzleAuthorRepository } from '@core/author';
+import {
+  AUTHOR_REPOSITORY,
+  PERMISSION_CHECKER,
+  DrizzleAuthorRepository,
+  RolePermissionChecker,
+} from '@core/author';
 import {
   PLATFORM_ADMIN_REPOSITORY,
   DrizzlePlatformAdminRepository,
@@ -7,7 +12,7 @@ import {
 import { TENANT_REPOSITORY, DrizzleTenantRepository } from '@core/tenant';
 import { AuthController } from './auth.controller';
 import { PrincipalGuard } from '../../common/guards/principal.guard';
-import { RoleGuard } from '../../common/guards/role.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
 
 /**
  * Binds the two repositories PrincipalGuard needs, via symbol tokens declared in
@@ -30,12 +35,14 @@ import { RoleGuard } from '../../common/guards/role.guard';
       useClass: DrizzlePlatformAdminRepository,
     },
     { provide: TENANT_REPOSITORY, useClass: DrizzleTenantRepository },
+    { provide: PERMISSION_CHECKER, useClass: RolePermissionChecker },
     PrincipalGuard,
-    RoleGuard,
+    PermissionGuard,
   ],
   exports: [
     PrincipalGuard,
-    RoleGuard,
+    PermissionGuard,
+    PERMISSION_CHECKER,
     AUTHOR_REPOSITORY,
     PLATFORM_ADMIN_REPOSITORY,
   ],

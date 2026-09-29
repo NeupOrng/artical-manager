@@ -68,6 +68,27 @@ export const authors = pgTable(
     role: authorRole('role').notNull().default('contributor'),
 
     /**
+     * Set when an author is deactivated; null while they have access.
+     *
+     * A timestamp rather than a boolean: "when did this person lose access" is
+     * the question asked afterwards, and a flag cannot answer it. Deactivation
+     * is one of THREE layers — PrincipalGuard refuses this row on the next
+     * request, the Kratos identity is set inactive so login is refused, and
+     * their sessions are revoked. See docs/author-management.md.
+     *
+     * Never a delete: articles reference this row, and the byline is history.
+     */
+    deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+
+    /**
+     * Last authenticated request, written by PrincipalGuard at most once an
+     * hour (it is on the hot path). Null means the invite was never accepted —
+     * which is exactly how the Authors page tells "Invited" from "Active"
+     * without asking Kratos whether a password exists.
+     */
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+
+    /**
      * Optional profile picture, referencing `media` rather than holding a bare
      * URL: that reuses the presign/confirm/derive pipeline, so an avatar gets
      * the same WebP renditions and the same tenant scoping as any other image.

@@ -1,5 +1,6 @@
 import type { TenantId } from '@core/shared';
-import type { Author } from '../domain/author';
+import type { Author, AuthorRole } from '../domain/author';
+import type { AuthorStatus } from '../domain/access';
 
 export const AUTHOR_REPOSITORY = Symbol('AUTHOR_REPOSITORY');
 
@@ -8,6 +9,34 @@ export const AUTHOR_REPOSITORY = Symbol('AUTHOR_REPOSITORY');
  * trailing tenantId makes an unscoped query a typo away rather than a compile
  * error. See core-engine/docs/tenant-isolation.md.
  */
+/** A row on the Authors page: the author, their access status, and their output. */
+export interface AuthorWithUsage extends Author {
+  status: AuthorStatus;
+  /** Articles they have published, and drafts they are holding. Any category. */
+  publishedCount: number;
+  draftCount: number;
+}
+
+/** Everything needed to record an invited author. The id and login are minted by the caller. */
+export interface NewAuthor {
+  id: string;
+  kratosIdentityId: string;
+  username: string;
+  name: string;
+  email: string;
+  role: AuthorRole;
+}
+
+/**
+ * An edit from the Authors page. `username` is absent deliberately: it is the
+ * login identifier and a public URL, and is locked after creation.
+ */
+export interface AuthorChanges {
+  name?: string;
+  email?: string;
+  role?: AuthorRole;
+}
+
 export interface AuthorRepository {
   /**
    * Usernames collide across tenants by design — two tenants may each have an
@@ -43,4 +72,33 @@ export interface AuthorRepository {
    * source of tenant scope for the rest of the request.
    */
   findByKratosIdentityId(identityId: string): Promise<Author | null>;
+
+  // ── Author management (admin) ──────────────────────────────────────────────
+
+  /** Every author of this site, active and deactivated, with counts. Ordered by name. */
+  listForAdmin(tenantId: TenantId): Promise<AuthorWithUsage[]>;
+
+  create(tenantId: TenantId, author: NewAuthor): Promise<void>;
+
+  /** Applies an edit. Omitted fields are untouched. */
+  update(tenantId: TenantId, authorId: string, changes: AuthorChanges): Promise<void>;
+
+  /** `at` withdraws access; null restores it. Never deletes — articles reference the row. */
+  setDeactivated(tenantId: TenantId, authorId: string, at: Date | null): Promise<void>;
+
+  /**
+   * Active admins of this site. Read immediately before a role change or a
+   * deactivation, because "is there another admin" is only true at an instant.
+   */
+  countActiveAdmins(tenantId: TenantId): Promise<number>;
+
+  /** Whether this site already has that username. Kratos enforces the global rule. */
+  existsWithUsername(tenantId: TenantId, username: string): Promise<boolean>;
+
+  /**
+   * Records that this author made an authenticated request, but only if the
+   * stored value is older than `staleBefore`. Throttled because it runs on the
+   * hot path for every request; also what makes an unaccepted invite visible.
+   */
+  touchLastSeen(tenantId: TenantId, authorId: string, staleBefore: Date): Promise<void>;
 }

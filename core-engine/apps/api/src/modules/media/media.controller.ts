@@ -27,6 +27,8 @@ import {
 } from '@core/media';
 import { asMediaId, newId, type MediaId } from '@core/shared';
 import { PrincipalGuard } from '../../common/guards/principal.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { CurrentAuthor } from '../../common/decorators/current-principal.decorator';
 import type { AuthorPrincipal } from '../../common/principal';
 import {
@@ -56,7 +58,7 @@ import {
  */
 @ApiTags('admin/media')
 @Controller('admin/v1/media')
-@UseGuards(PrincipalGuard)
+@UseGuards(PrincipalGuard, PermissionGuard)
 export class MediaController {
   constructor(
     @Inject(MEDIA_REPOSITORY) private readonly repo: MediaRepository,
@@ -72,6 +74,7 @@ export class MediaController {
    * exceed that. See docs/media-and-uploads.md.
    */
   @Post('presign')
+  @RequirePermission('media.upload')
   @ApiOperation({ summary: 'Get a presigned URL for a direct browser upload' })
   @ApiOkResponse({ type: PresignUploadResponseDto })
   async presign(
@@ -104,6 +107,7 @@ export class MediaController {
    * live article.
    */
   @Post(':mediaId/confirm')
+  @RequirePermission('media.upload')
   @ApiOperation({ summary: 'Confirm an upload; the worker sweep derives variants' })
   @ApiOkResponse({ type: MediaDto })
   async confirm(
@@ -151,6 +155,7 @@ export class MediaController {
   }
 
   @Get()
+  @RequirePermission('media.read')
   @ApiOperation({ summary: 'List the tenant media library' })
   @ApiOkResponse({ type: MediaListDto })
   async list(
@@ -170,6 +175,7 @@ export class MediaController {
   }
 
   @Get(':mediaId')
+  @RequirePermission('media.read')
   @ApiOperation({ summary: 'Fetch one media item (poll this for processing status)' })
   @ApiOkResponse({ type: MediaDto })
   async byId(
@@ -182,6 +188,7 @@ export class MediaController {
   }
 
   @Delete(':mediaId')
+  @RequirePermission('media.delete')
   @ApiOperation({ summary: 'Soft-delete a media item (the object is retained)' })
   async remove(
     @CurrentAuthor() author: AuthorPrincipal,

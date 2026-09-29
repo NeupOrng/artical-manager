@@ -250,6 +250,14 @@ See `core-engine/docs/article-status-lifecycle.md` for the status state machine.
   `og:site_name`, plus a `twitter:card` fallback. Social crawlers do not run JS.
 - **Public endpoints can only ever return `status = published`.** Enforced by a
   separate controller and separate DTOs, not by a conditional.
+- **Any table created, dropped or altered updates `core-engine/docs/data-model.md`
+  in the same change.** Same rule and same reason as `api-reference.md`: it is a
+  contract people read *instead of* the schema files, and a reference that lags is
+  worse than none, because it is trusted right up until it is wrong. A new column
+  needs a row; a new table needs a section, its foreign keys in the delete table,
+  and a line on the map. If a change makes a documented claim false — a nullable
+  column becoming NOT NULL, a constraint gaining a partial clause — fixing the doc
+  is part of the change, not follow-up work.
 
 ---
 
@@ -309,6 +317,17 @@ Do not implement these without asking.
 
 ### Decided, previously open
 
+- **Authors management + a Keto-ready permission layer — decided 2026-09-14, NOT
+  built.** Site admins (only) invite authors by a one-time sign-up link shown to
+  copy, edit name / email / role, and deactivate or reactivate them; a new site's
+  first admin comes from a CLI task. Usernames are locked after creation. A
+  deactivated author cannot sign in, the API refuses them, their public page
+  404s and bylines render unlinked; their articles stay. Every protected action
+  becomes a named permission checked through one port — answered from
+  `authors.role` today, so roles still live in ONE place; Keto replaces that one
+  adapter later (§5 is unchanged until then). "My profile" is deferred. Open:
+  site cache revalidation (see the proposal §2.3). Full plan:
+  `docs/proposals/authors-management.md`.
 - **Readership analytics via Umami — decided 2026-09-12, built 2026-09-13.** Umami
   (self-hosted, MIT, on the existing Postgres in its own `umami` database, no
   public surface) computes readership for the backoffice dashboard. Views are
@@ -336,13 +355,14 @@ Do not implement these without asking.
 |---|---|
 | `core-engine/CLAUDE.md` | NestJS + DDD architecture, layering, module wiring, what not to do |
 | `core-engine/docs/` | Status lifecycle, API conventions, auth flow, tenant isolation, scheduling, media — **read before changing backend code** |
+| `core-engine/docs/data-model.md` | **The schema contract.** Every table, foreign key, delete rule and constraint pattern, plus what is deliberately not modelled — so it must be updated in the same change as any table (see §7). |
 | `core-engine/docs/api-reference.md` | **The response contract.** Frontends hand-write their types from this rather than from codegen or a shared package (decided 2026-08-08) — so it must be updated in the same change as any endpoint. |
 | `backoffice/CLAUDE.md` | Backoffice UI: Kratos flows, the API proxy, editor, preview |
 | `websites/CLAUDE.md` | What the public sites do, OG spec, ISR/revalidation contract |
 | `websites/*/CLAUDE.md` | Per-tenant domain knowledge |
 | `infrastructure/CLAUDE.md` | Compose topology, gateway/identity config, backups, monitoring |
 | `/api` | Bruno collection — the live shape of every endpoint |
-| `docs/proposals/` | Approved plans not yet built. Read the relevant one before implementing it; once built, the docs it names become the source of truth. None open — `dashboard-analytics-umami.md` is built and kept as history. |
+| `docs/proposals/` | Approved plans not yet built. Read the relevant one before implementing it; once built, the docs it names become the source of truth. Open: `authors-management.md`. Built and kept as history: `dashboard-analytics-umami.md`. |
 | `core-engine/docs/readership-analytics.md` | View recording, dashboard analytics, Umami: the two stores, isolation, verified API facts, operating tasks |
 
 ---

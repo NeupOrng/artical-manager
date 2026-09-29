@@ -1,6 +1,6 @@
 ---
 name: change-db-schema
-description: Change the Drizzle schema in core-engine and generate/apply a migration safely — tenant-leading indexes, additive-first column changes, reading the generated SQL before committing, and keeping seeds in sync. Use this whenever the user asks to add or change a column, table, index, constraint, or enum; asks to "add a field to Article", "record view counts", "add is_sponsored"; or asks anything about migrations. Also use it when a feature request implies a schema change even if the user hasn't said so, since retrofitting a column onto populated tables is far more expensive than getting it right the first time.
+description: Change the Drizzle schema in core-engine and generate/apply a migration safely — tenant-leading indexes, additive-first column changes, reading the generated SQL before committing, updating docs/data-model.md in the same change, and keeping seeds in sync. Use this whenever the user asks to add or change a column, table, index, constraint, or enum; asks to "add a field to Article", "record view counts", "add is_sponsored"; or asks anything about migrations. Also use it when a feature request implies a schema change even if the user hasn't said so, since retrofitting a column onto populated tables is far more expensive than getting it right the first time.
 ---
 
 # Changing the database schema
@@ -72,7 +72,25 @@ task db:migrate
 task db:psql     # \d <table> to confirm what actually landed
 ```
 
-**6. Update the seed** in `libs/database/src/seed/` if the new column is needed
+**6. Update `core-engine/docs/data-model.md`.** Required, not optional.
+
+That file is the schema contract — people read it *instead of* opening nine
+schema files, so a stale row there is worse than no doc at all. What to touch
+depends on the change:
+
+| Change | Update |
+|---|---|
+| New column | Its table's section; the column table if it has one |
+| New table | A `###` section, its FKs in the delete table, a line on the map |
+| New/changed FK | The delete-behaviour table — every FK is listed there |
+| Nullable → NOT NULL | The column note, and **Known gaps** if it was listed |
+| New partial unique or soft delete | The relevant pattern section |
+| Dropped column or table | Remove it. A doc describing a column that no longer exists is the worst kind |
+
+If a change makes an existing claim false, correcting it is part of the change.
+The doc states it describes *applied* state — keep that true.
+
+**7. Update the seed** in `libs/database/src/seed/` if the new column is needed
 for local development, and the Bruno collection in `/api` if it's exposed.
 
 ## Never edit an applied migration

@@ -61,7 +61,7 @@ Read what's relevant, not everything:
 | Any endpoint | `core-engine/docs/api-conventions.md` |
 | Any query or repository | `core-engine/docs/tenant-isolation.md` |
 | Auth, guards, identity | `core-engine/docs/auth-request-flow.md` |
-| Schema | `core-engine/docs/database-and-migrations.md` |
+| Schema | `core-engine/docs/data-model.md` (what the tables are and how they relate), then `core-engine/docs/database-and-migrations.md` (how to change them) |
 | Uploads, images, og:image | `core-engine/docs/media-and-uploads.md` |
 | Backoffice UI | `admin/CLAUDE.md` + `references/nuxt-patterns.md` |
 | Public sites | `websites/CLAUDE.md` + the site's own + `references/nuxt-patterns.md` |
@@ -236,7 +236,7 @@ that was never run isn't done.
 
 | What changed | Update |
 |---|---|
-| Schema | `core-engine/docs/database-and-migrations.md`; root `CLAUDE.md` §6 |
+| Schema | **`core-engine/docs/data-model.md` (required — see root `CLAUDE.md` §7)**; `core-engine/docs/database-and-migrations.md`; root `CLAUDE.md` §6 |
 | Endpoint | `core-engine/docs/api-conventions.md` + the Bruno request in `/api` |
 | Status or background behaviour | `article-status-lifecycle.md`, `background-work.md` |
 | Auth flow | `auth-request-flow.md`, root `CLAUDE.md` §5 |

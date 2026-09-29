@@ -39,6 +39,15 @@ export const envSchema = z.object({
   MEDIA_PRESIGN_TTL_SECONDS: z.coerce.number().int().positive().default(300),
 
   /**
+   * Kratos' ADMIN api, internal only (kratos:4434) — never routed through Kong.
+   *
+   * REQUIRED: the API provisions and deactivates authors through it, and a
+   * missing value must fail at boot rather than at the moment an admin tries to
+   * remove someone who left. Anything that can reach this can create logins.
+   */
+  KRATOS_ADMIN_URL: z.string().url(),
+
+  /**
    * Readership analytics (Umami). All three OPTIONAL on purpose: without them
    * the API still boots and serves, and the dashboard reports analytics as
    * "not-connected". Internal URL only (umami:3000) — it is never public.

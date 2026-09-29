@@ -27,6 +27,9 @@ import type { Principal } from '../principal';
  */
 const IDENTITY_HEADER = 'x-kratos-identity-id';
 
+/** How stale `last_seen_at` may get before a request refreshes it. */
+const LAST_SEEN_THROTTLE_MS = 60 * 60 * 1000;
+
 @Injectable()
 export class PrincipalGuard implements CanActivate {
   private readonly logger = new Logger(PrincipalGuard.name);
@@ -65,6 +68,22 @@ export class PrincipalGuard implements CanActivate {
     const author = await this.authors.findByKratosIdentityId(identityId);
 
     if (author) {
+      // Deactivation takes effect on the very NEXT request, because the row is
+      // read per request rather than trusted from a token claim (root CLAUDE.md
+      // §5). Kratos also refuses their login and their sessions are revoked,
+      // but this check is what makes the API refusal immediate — and it holds
+      // even if one of those calls failed and was never retried.
+      //
+      // A DISTINCT code from "not provisioned": the backoffice can tell a
+      // deactivated person what happened, rather than bouncing them to a login
+      // page they are still able to pass.
+      if (author.deactivatedAt) {
+        throw new ForbiddenException({
+          code: 'ACCOUNT_DEACTIVATED',
+          message: 'This account has been deactivated.',
+        });
+      }
+
       (req as AuthenticatedRequest).principal = {
         kind: 'author',
         authorId: author.id,
@@ -74,6 +93,24 @@ export class PrincipalGuard implements CanActivate {
         username: author.username,
         name: author.name,
       };
+
+      // Not awaited, and throttled inside the UPDATE itself: this runs on every
+      // authenticated request. It is what separates an invited author who has
+      // never signed in from an active one, and gives the Authors page its
+      // "last active" column — without a login hook or a second table.
+      void this.authors
+        .touchLastSeen(
+          asTenantId(author.tenantId),
+          author.id,
+          new Date(Date.now() - LAST_SEEN_THROTTLE_MS),
+        )
+        .catch((error: unknown) => {
+          this.logger.warn(
+            `could not record last-seen for author ${author.id}: `
+            + (error instanceof Error ? error.message : 'unknown error'),
+          );
+        });
+
       return true;
     }
 

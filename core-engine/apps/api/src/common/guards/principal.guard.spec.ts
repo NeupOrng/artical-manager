@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import type { ExecutionContext } from '@nestjs/common';
-import { asTenantId } from '@core/shared';
+import { asTenantId, type TenantId } from '@core/shared';
 import type { Author, AuthorRepository } from '@core/author';
 import type {
   PlatformAdmin,
@@ -22,6 +22,7 @@ const TECH = '0198f000-0000-7000-8000-000000000001';
 const anAuthor = (over: Partial<Author> = {}): Author => ({
   id: 'author-1',
   tenantId: asTenantId(TECH),
+  kratosIdentityId: 'identity-1',
   username: 'mara-okonkwo',
   name: 'Mara Okonkwo',
   email: 'mara@example.test',
@@ -30,6 +31,8 @@ const anAuthor = (over: Partial<Author> = {}): Author => ({
   contactPublic: false,
   role: 'editor',
   avatarUrl: null,
+  deactivatedAt: null,
+  lastSeenAt: new Date('2026-09-01T00:00:00Z'),
   ...over,
 });
 
@@ -52,6 +55,18 @@ class FakeAuthors implements AuthorRepository {
   }
   findById(): Promise<Author | null> {
     return Promise.resolve(null);
+  }
+
+  // The management half of the port. This guard never calls it; the methods
+  // exist so the fake satisfies the interface, and shout if that changes.
+  listForAdmin(): never { throw new Error('not used by PrincipalGuard'); }
+  create(): never { throw new Error('not used by PrincipalGuard'); }
+  update(): never { throw new Error('not used by PrincipalGuard'); }
+  setDeactivated(): never { throw new Error('not used by PrincipalGuard'); }
+  countActiveAdmins(): never { throw new Error('not used by PrincipalGuard'); }
+  existsWithUsername(): never { throw new Error('not used by PrincipalGuard'); }
+  touchLastSeen(_tenantId: TenantId, _authorId: string, _staleBefore: Date): Promise<void> {
+    return Promise.resolve();
   }
 }
 
@@ -198,5 +213,57 @@ describe('PrincipalGuard', () => {
 
       expect(req.principal?.kind).toBe('author');
     });
+  });
+});
+
+describe('a deactivated author', () => {
+  const deactivated = { 'identity-1': anAuthor({ deactivatedAt: new Date('2026-09-20T00:00:00Z') }) };
+
+  it('is refused, with a code the backoffice can tell apart from "not provisioned"', async () => {
+    const guard = new PrincipalGuard(new FakeAuthors(deactivated), new FakePlatformAdmins());
+    const { ctx } = contextFor({ 'x-kratos-identity-id': 'identity-1' });
+
+    const error = await guard.canActivate(ctx).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({ code: 'ACCOUNT_DEACTIVATED' });
+  });
+
+  it('never gets a tenant scope attached to the request', async () => {
+    const guard = new PrincipalGuard(new FakeAuthors(deactivated), new FakePlatformAdmins());
+    const { ctx, req } = contextFor({ 'x-kratos-identity-id': 'identity-1' });
+
+    await guard.canActivate(ctx).catch(() => undefined);
+
+    expect(req.principal).toBeUndefined();
+  });
+});
+
+describe('recording last-seen', () => {
+  it('is fire-and-forget, so a failure cannot refuse a valid request', async () => {
+    const authors = new FakeAuthors({ 'identity-1': anAuthor() });
+    authors.touchLastSeen = () => Promise.reject(new Error('database gone'));
+    const guard = new PrincipalGuard(authors, new FakePlatformAdmins());
+    const { ctx, req } = contextFor({ 'x-kratos-identity-id': 'identity-1' });
+
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    expect(req.principal).toMatchObject({ kind: 'author' });
+  });
+
+  it('asks for a refresh only of values older than an hour', async () => {
+    const authors = new FakeAuthors({ 'identity-1': anAuthor() });
+    const calls: Date[] = [];
+    authors.touchLastSeen = (_tenantId, _authorId, staleBefore: Date) => {
+      calls.push(staleBefore);
+      return Promise.resolve();
+    };
+    const guard = new PrincipalGuard(authors, new FakePlatformAdmins());
+
+    await guard.canActivate(contextFor({ 'x-kratos-identity-id': 'identity-1' }).ctx);
+
+    expect(calls).toHaveLength(1);
+    const ageMs = Date.now() - calls[0]!.getTime();
+    expect(ageMs).toBeGreaterThanOrEqual(59 * 60 * 1000);
+    expect(ageMs).toBeLessThanOrEqual(61 * 60 * 1000);
   });
 });

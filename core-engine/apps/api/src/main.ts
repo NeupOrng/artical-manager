@@ -5,6 +5,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { DomainExceptionFilter } from './common/domain-exception.filter';
+import { IdentityExceptionFilter } from './common/identity-exception.filter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -14,7 +15,8 @@ async function bootstrap(): Promise<void> {
 
   // whitelist + forbidNonWhitelisted: unknown fields are an error, not silently
   // dropped. See docs/api-conventions.md.
-  app.useGlobalFilters(new DomainExceptionFilter());
+  // Domain errors map to 4xx by kind; an identity-service outage is a 503.
+  app.useGlobalFilters(new DomainExceptionFilter(), new IdentityExceptionFilter());
 
   app.useGlobalPipes(
     new ValidationPipe({

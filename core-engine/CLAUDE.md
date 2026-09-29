@@ -21,7 +21,8 @@ relevant one first; don't infer these rules from existing code.
 | `docs/tenant-isolation.md` | writing any query or repository method |
 | `docs/background-work.md` | touching the worker or polled background work |
 | `docs/media-and-uploads.md` | touching uploads, MinIO, or image URLs |
-| `docs/database-and-migrations.md` | changing the schema |
+| `docs/data-model.md` | **any schema work** — the tables, every FK and delete rule, the constraint patterns. Update it in the same change as the table, or it starts lying about the database people are trusting it to describe. |
+| `docs/database-and-migrations.md` | changing the schema (conventions and the migration process) |
 | `docs/readership-analytics.md` | touching view recording, dashboard analytics, or Umami |
 
 ---

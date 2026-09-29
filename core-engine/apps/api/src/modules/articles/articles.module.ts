@@ -5,7 +5,7 @@ import { ArticlesController } from './articles.controller';
 import { AuthModule } from '../auth/auth.module';
 
 /**
- * AuthModule supplies PrincipalGuard, RoleGuard, and AUTHOR_REPOSITORY — bound
+ * AuthModule supplies PrincipalGuard, PermissionGuard, the permission checker, and AUTHOR_REPOSITORY — bound
  * once there rather than re-declared here, so there is one provider set per
  * fact.
  */

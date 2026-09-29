@@ -4,6 +4,7 @@ import { DatabaseModule } from '@core/database';
 import { validateEnv } from './config/env';
 import { RedisModule } from './common/redis.provider';
 import { ReadershipModule } from './common/readership.provider';
+import { IdentityModule } from './common/identity.provider';
 import { HealthModule } from './modules/health/health.module';
 import { PublicModule } from './modules/public/public.module';
 import { MediaModule } from './modules/media/media.module';
@@ -11,6 +12,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ArticlesModule } from './modules/articles/articles.module';
 import { CategoriesModule } from './modules/categories/categories.module';
+import { AuthorsModule } from './modules/authors/authors.module';
 
 @Module({
   imports: [
@@ -21,6 +23,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
     DatabaseModule,
     RedisModule,
     ReadershipModule,
+    IdentityModule,
     HealthModule,
     PublicModule,
     MediaModule,
@@ -28,7 +31,8 @@ import { CategoriesModule } from './modules/categories/categories.module';
     DashboardModule,
     ArticlesModule,
     CategoriesModule,
-    // Still to come: TenantsModule, AuthorsModule.
+    AuthorsModule,
+    // Still to come: TenantsModule.
     // See core-engine/CLAUDE.md.
   ],
 })

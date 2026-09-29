@@ -16,6 +16,11 @@ export type AuthorRole = 'admin' | 'editor' | 'contributor';
 export interface Author {
   id: string;
   tenantId: TenantId;
+  /**
+   * The Kratos login behind this author. Internal: it identifies the account to
+   * the identity service and must never appear on a public or admin DTO.
+   */
+  kratosIdentityId: string;
   /** Public identity handle. Null only on rows predating the profile feature. */
   username: string | null;
   name: string;
@@ -27,6 +32,13 @@ export interface Author {
   role: AuthorRole;
   /** Resolved by the repository from `avatar_media_id`. Usually null. */
   avatarUrl: string | null;
+  /**
+   * Set when access was withdrawn; null while active. PrincipalGuard refuses a
+   * deactivated author, and public surfaces hide them. See domain/access.ts.
+   */
+  deactivatedAt: Date | null;
+  /** Last authenticated request. Null means an invite that was never accepted. */
+  lastSeenAt: Date | null;
 }
 
 /**

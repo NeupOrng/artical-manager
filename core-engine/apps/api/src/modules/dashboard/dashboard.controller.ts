@@ -18,6 +18,8 @@ import {
 import { MEDIA_REPOSITORY, type MediaRepository } from '@core/media';
 import { TENANT_REPOSITORY, type TenantRepository, type TenantWithStats } from '@core/tenant';
 import { PrincipalGuard } from '../../common/guards/principal.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { CurrentAuthor, CurrentPrincipal } from '../../common/decorators/current-principal.decorator';
 import type { AuthorPrincipal, Principal } from '../../common/principal';
 import { DashboardAnalyticsDto, DashboardAnalyticsQuery } from './dto/dashboard-analytics.dto';
@@ -44,7 +46,7 @@ const RECENT_LIMIT = 8;
 @ApiTags('dashboard')
 @ApiExtraModels(AuthorDashboardDto, PlatformDashboardDto)
 @Controller('admin/v1')
-@UseGuards(PrincipalGuard)
+@UseGuards(PrincipalGuard, PermissionGuard)
 export class DashboardController {
   private readonly logger = new Logger(DashboardController.name);
 
@@ -64,6 +66,7 @@ export class DashboardController {
    * the resolved role, never from input.
    */
   @Get('dashboard/analytics')
+  @RequirePermission('dashboard.read')
   @ApiOperation({
     summary: 'Readership and editorial analytics for a range, in the viewer\'s time zone',
   })

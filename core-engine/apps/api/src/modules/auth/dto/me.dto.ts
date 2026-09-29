@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { Permission } from '@core/author';
 
 /**
  * What the backoffice learns about the current principal.
@@ -55,4 +56,14 @@ export class MeDto {
     description: 'Present for tenant authors, null for platform admins.',
   })
   role!: 'admin' | 'editor' | 'contributor' | null;
+
+  @ApiProperty({
+    type: [String],
+    description:
+      'What this principal may do, e.g. "articles.publish". The backoffice hides '
+      + 'controls by permission rather than by role name. EMPTY for platform '
+      + 'admins: they hold no tenant permissions, by design.',
+    example: ['dashboard.read', 'articles.read', 'articles.write'],
+  })
+  permissions!: Permission[];
 }

@@ -1,5 +1,8 @@
 # Database & migrations
 
+**Looking for what the tables are and how they relate?** That is
+`data-model.md`. This file is the *conventions and process* for changing them.
+
 Read before changing the schema. Schema lives in `libs/database/src/schema/`,
 migrations in `libs/database/src/migrations/`.
 
@@ -47,6 +50,24 @@ Adding a non-nullable column to a populated table locks and fails. Split it:
 The same applies to renames — add, dual-write, migrate reads, drop. Given the public
 sites may be serving ISR pages built against the previous shape, a schema change and
 a deploy are never simultaneous.
+
+## Every schema change updates `data-model.md`
+
+A rule, not a courtesy — root `CLAUDE.md` §7. Same rule and same reason as
+`api-reference.md`: both are contracts people read *instead of* the source, so a
+stale line is trusted right up until it is wrong.
+
+| Change | What to update in `data-model.md` |
+|---|---|
+| New column | Its table's section |
+| New table | A `###` section, its FKs in the delete table, a line on the map |
+| New or changed FK | The delete-behaviour table — every FK is listed there |
+| Nullable → NOT NULL | The column note, and **Known gaps** if it was listed there |
+| New partial unique, or a new soft delete | The relevant pattern section |
+| Dropped column or table | Remove it. A doc describing something that no longer exists is the worst kind |
+
+If a change makes an existing claim false, correcting it is part of that change.
+The file states it describes **applied** state — keep that true.
 
 ## The reserved Phase 2 columns
 

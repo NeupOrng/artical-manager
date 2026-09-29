@@ -44,8 +44,8 @@ import {
   type ArticleId,
 } from '@core/shared';
 import { PrincipalGuard } from '../../common/guards/principal.guard';
-import { RoleGuard } from '../../common/guards/role.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { CurrentAuthor } from '../../common/decorators/current-principal.decorator';
 import type { AuthorPrincipal } from '../../common/principal';
 import {
@@ -68,7 +68,7 @@ import {
  */
 @ApiTags('admin/articles')
 @Controller('admin/v1/articles')
-@UseGuards(PrincipalGuard, RoleGuard)
+@UseGuards(PrincipalGuard, PermissionGuard)
 export class ArticlesController {
   constructor(
     @Inject(ARTICLE_REPOSITORY) private readonly repo: ArticleRepository,
@@ -76,7 +76,7 @@ export class ArticlesController {
   ) {}
 
   @Get()
-  @Roles('contributor')
+  @RequirePermission('articles.read')
   @ApiOperation({ summary: 'List articles, any status' })
   @ApiOkResponse({ type: ArticleListDto })
   async list(
@@ -116,7 +116,7 @@ export class ArticlesController {
   }
 
   @Get(':articleId')
-  @Roles('contributor')
+  @RequirePermission('articles.read')
   @ApiOperation({ summary: 'One article, with its body' })
   @ApiOkResponse({ type: ArticleDetailDto })
   @ApiNotFoundResponse({ description: 'Missing, or belongs to another tenant.' })
@@ -130,7 +130,7 @@ export class ArticlesController {
   }
 
   @Post()
-  @Roles('contributor')
+  @RequirePermission('articles.write')
   @ApiOperation({ summary: 'Create a draft' })
   @ApiOkResponse({ type: ArticleDetailDto })
   @ApiConflictResponse({ description: 'Slug already used on this site.' })
@@ -164,7 +164,7 @@ export class ArticlesController {
   }
 
   @Patch(':articleId')
-  @Roles('contributor')
+  @RequirePermission('articles.write')
   @ApiOperation({ summary: 'Edit an article' })
   @ApiOkResponse({ type: ArticleDetailDto })
   @ApiConflictResponse({ description: 'Slug taken, or locked by publication.' })
@@ -217,7 +217,7 @@ export class ArticlesController {
    * contributor's call.
    */
   @Post(':articleId/publish')
-  @Roles('editor')
+  @RequirePermission('articles.publish')
   @ApiOperation({ summary: 'Publish immediately' })
   @ApiOkResponse({ type: ArticleDetailDto })
   @ApiUnprocessableEntityResponse({
@@ -239,7 +239,7 @@ export class ArticlesController {
   }
 
   @Post(':articleId/unpublish')
-  @Roles('editor')
+  @RequirePermission('articles.publish')
   @ApiOperation({ summary: 'Return a published article to draft' })
   @ApiOkResponse({ type: ArticleDetailDto })
   async unpublish(
@@ -257,7 +257,7 @@ export class ArticlesController {
   }
 
   @Delete(':articleId')
-  @Roles('editor')
+  @RequirePermission('articles.delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete an article' })
   @ApiNoContentResponse()

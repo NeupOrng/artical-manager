@@ -27,8 +27,8 @@ import {
 } from '@core/category';
 import { asCategoryId, newId, type CategoryId } from '@core/shared';
 import { PrincipalGuard } from '../../common/guards/principal.guard';
-import { RoleGuard } from '../../common/guards/role.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { CurrentAuthor } from '../../common/decorators/current-principal.decorator';
 import type { AuthorPrincipal } from '../../common/principal';
 import {
@@ -55,14 +55,14 @@ import {
  */
 @ApiTags('admin/categories')
 @Controller('admin/v1/categories')
-@UseGuards(PrincipalGuard, RoleGuard)
+@UseGuards(PrincipalGuard, PermissionGuard)
 export class CategoriesController {
   constructor(
     @Inject(CATEGORY_REPOSITORY) private readonly repo: CategoryRepository,
   ) {}
 
   @Get()
-  @Roles('contributor')
+  @RequirePermission('categories.read')
   @ApiOperation({ summary: 'List categories in nav order, optionally with retired ones' })
   @ApiOkResponse({ type: CategoryListDto })
   async list(
@@ -76,7 +76,7 @@ export class CategoriesController {
   }
 
   @Post()
-  @Roles('editor')
+  @RequirePermission('categories.manage')
   @ApiOperation({ summary: 'Create a category at the end of the nav' })
   @ApiCreatedResponse({ type: CategoryDto })
   async create(
@@ -106,7 +106,7 @@ export class CategoriesController {
    * `reorder` can never be read as an id.
    */
   @Post('reorder')
-  @Roles('editor')
+  @RequirePermission('categories.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Set the nav order — every live category id, in order' })
   @ApiOkResponse({ type: CategoryListDto })
@@ -124,7 +124,7 @@ export class CategoriesController {
   }
 
   @Patch(':categoryId')
-  @Roles('editor')
+  @RequirePermission('categories.manage')
   @ApiOperation({ summary: 'Rename, re-describe, or move a category URL' })
   @ApiOkResponse({ type: CategoryDto })
   async update(
@@ -154,7 +154,7 @@ export class CategoriesController {
   }
 
   @Delete(':categoryId')
-  @Roles('editor')
+  @RequirePermission('categories.manage')
   @ApiOperation({ summary: 'Retire a category (soft delete; articles keep their label)' })
   async remove(
     @CurrentAuthor() author: AuthorPrincipal,
@@ -176,7 +176,7 @@ export class CategoriesController {
    * a live category returns it unchanged rather than erroring.
    */
   @Post(':categoryId/restore')
-  @Roles('editor')
+  @RequirePermission('categories.manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Restore a retired category to the end of the nav' })
   @ApiOkResponse({ type: CategoryDto })

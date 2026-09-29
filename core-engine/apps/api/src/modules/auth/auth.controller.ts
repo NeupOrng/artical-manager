@@ -1,5 +1,6 @@
 import { Controller, Get, Inject, UseGuards } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse, ApiForbiddenResponse } from '@nestjs/swagger';
+import { permissionsFor } from '@core/author';
 import { TENANT_REPOSITORY, type TenantRepository } from '@core/tenant';
 import { PrincipalGuard } from '../../common/guards/principal.guard';
 import { CurrentPrincipal } from '../../common/decorators/current-principal.decorator';
@@ -58,6 +59,9 @@ export class AuthController {
         tenantId: null,
         tenantName: null,
         role: null,
+        // A platform admin holds no TENANT permissions — they have no tenant.
+        // Their own surface is guarded by @PlatformAdminOnly().
+        permissions: [],
       };
     }
 
@@ -74,6 +78,10 @@ export class AuthController {
       // name instead of 500ing on every page.
       tenantName: tenant?.name ?? null,
       role: principal.role,
+      // What this author may do. The backoffice hides controls by permission
+      // rather than by comparing role names, so moving authorization to Keto
+      // later does not touch the UI.
+      permissions: permissionsFor(principal.role),
     };
   }
 }
