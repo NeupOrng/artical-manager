@@ -1,0 +1,21 @@
+meta { name: Onboard an author into a site, type: http, seq: 3 }
+post { url: {{adminBase}}/platform/tenants/{{tenantId}}/authors, body: json, auth: none }
+headers { Cookie: {{sessionCookie}} }
+body:json {
+  {
+    "username": "tomas-reyes",
+    "name": "Tomas Reyes",
+    "email": "tomas@example.com",
+    "role": "admin"
+  }
+}
+docs {
+  Bootstraps a site's first admin. Same use case as POST /admin/v1/authors —
+  only the tenant source differs (path, not session).
+
+  The returned invite.link is shown ONCE and is not stored. There is no endpoint
+  that returns it again.
+
+  A3 revised 2026-11-10: platform admins onboard; they do NOT edit or
+  deactivate. Those stay with the site's own admins.
+}

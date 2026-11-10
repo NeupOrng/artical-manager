@@ -1,0 +1,12 @@
+meta { name: Invite an author (site admin), type: http, seq: 1 }
+post { url: {{adminBase}}/authors, body: json, auth: none }
+headers { Cookie: {{sessionCookie}} }
+body:json {
+  { "username": "nina-sato", "name": "Nina Sato", "email": "nina@example.com", "role": "contributor" }
+}
+docs {
+  The site comes from the SESSION. Sending a tenantId here does nothing — that
+  is the point of the separate platform surface.
+
+  Returns a single-use link; nobody ever handles another person's password.
+}

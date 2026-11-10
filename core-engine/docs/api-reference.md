@@ -586,13 +586,132 @@ categories page says so.
 
 ---
 
+## Authors
+
+Who has access to a site. **Two surfaces**, because two kinds of principal ask:
+
+| | `/admin/v1/authors` | `/admin/v1/platform/...` |
+|---|---|---|
+| Caller | a site **admin** | a **platform admin** |
+| Site | from the session — the body cannot override it | named in the **path** |
+| Can do | invite, re-issue, edit, deactivate, reactivate | list and invite only |
+
+Separate controllers, not one with an optional `tenantId`. A site admin's
+endpoint keeps its single hard rule ("the site comes from the session") literally
+true, and an author principal cannot reach the platform surface at all —
+`@PlatformAdminOnly` refuses them before any handler runs.
+
+Editing and withdrawing access stay with the site's own admins (decision A3), so
+the operator can bootstrap a site and then stays out of it.
+
+### The author shape
+
+```jsonc
+{
+  "id": "019fdc…",
+  "username": "nina-sato",      // login identifier AND /author/:username. FIXED.
+  "name": "Nina Sato",
+  "email": "nina@example.com",  // contact address, NOT a credential
+  "role": "contributor",        // admin | editor | contributor
+  "status": "invited",          // active | invited | deactivated — DERIVED
+  "lastSeenAt": null,           // null => never signed in => "invited"
+  "deactivatedAt": null,
+  "contactPublic": false,
+  "publishedCount": 0,
+  "draftCount": 0
+}
+```
+
+**`status` is derived from two timestamps, never stored.** `deactivatedAt` set →
+`deactivated`; otherwise `lastSeenAt` null → `invited`, else `active`. That is
+how an unaccepted invite is told from an active account without asking Kratos
+whether a password exists. `lastSeenAt` is written by the guard, throttled to
+once an hour, so it is "roughly when", not an audit trail.
+
+`kratosIdentityId` is **never** exposed — it identifies the account to the
+identity service.
+
+### `GET /admin/v1/authors?status=&role=&search=`
+
+`{ "data": [ Author ] }` — everyone on the caller's site, deactivated included.
+Filters are applied in the application, not SQL, because `status` is derived.
+
+### `POST /admin/v1/authors`
+
+```jsonc
+{ "username": "nina-sato", "name": "Nina Sato", "email": "nina@example.com", "role": "contributor" }
+```
+
+→ `201 { "author": Author, "invite": { "link": "…", "expiresAt": "…" } }`
+
+Creates a login with **no password** and returns a single-use recovery link.
+Nobody ever handles another person's password.
+
+**The link is shown once and is not stored anywhere.** There is no endpoint that
+returns it again — use the re-issue route below while the invite is unaccepted.
+
+### `POST /admin/v1/authors/:id/invite-link`
+
+→ `200 { "link": "…", "expiresAt": "…" }`. A fresh link while the first is
+unaccepted. 409 once they have signed in, or if they are deactivated.
+
+### `PATCH /admin/v1/authors/:id`
+
+`{ name?, email?, role? }`. **Username is absent on purpose** — it is the login
+identifier and a public URL, and sending it is a 400.
+
+### `POST /admin/v1/authors/:id/deactivate` · `/reactivate`
+
+→ `200 Author`. Deactivation is three layers: the row (`deactivated_at`, so the
+API refuses from the next request), the Kratos identity (`state: inactive`), and
+session revocation. Any one alone leaves a hole. Their articles stay published;
+their public author page 404s and bylines render unlinked.
+
+### `GET /admin/v1/platform/tenants`
+
+→ `{ "data": [ { "id", "name", "domain", "nicheLabel", "authorCount" } ] }`
+
+Every site, for the operator to pick one. Deliberately unscoped — the one read
+that is legitimate because the caller has no tenant of their own and selecting
+one is the point. A separate shape from the dashboard's tenant summary, so
+future dashboard metrics do not silently join this response.
+
+### `GET /admin/v1/platform/tenants/:tenantId/authors`
+
+→ `{ "data": [ Author ] }`. The same author shape, for a named site.
+
+### `POST /admin/v1/platform/tenants/:tenantId/authors`
+
+Same body and same `201` response as the site-admin invite — it is the same use
+case, reached with the tenant from the path instead of the session. `404` if
+there is no such site, checked **before** anything is created: otherwise an
+invite against a bad id would leave a Kratos identity attached to a row nobody
+can reach.
+
+### Error codes
+
+| Code | Status | When |
+|---|---|---|
+| `USERNAME_TAKEN` | 409 | That username exists — possibly on another site (see below) |
+| `EMAIL_IN_USE` | 409 | That address already has an account, anywhere |
+| `AUTHOR_USERNAME_INVALID` | 422 | Fails the shared username rule |
+| `AUTHOR_NOT_FOUND` | 404 | No such author, **or** they belong to another site |
+| `LAST_ADMIN` | 409 | Would leave the site with no active admin |
+| `SELF_DEACTIVATION` | 409 | You cannot withdraw your own access |
+| `IDENTITY_UNAVAILABLE` | 503 | Kratos did not respond. Safe to retry |
+
+**Conflicts cross site boundaries, by design.** Kratos enforces username and
+email uniqueness installation-wide, so a 409 can mean "taken on another site".
+Usernames are already public; an email conflict leaks only that the address has
+an account somewhere. Accepted and recorded (decision B5).
+
+---
+
 ## Not built yet
 
 Agreed shape only; see `api-conventions.md` for the route list.
 
 ```
-GET                    /admin/v1/authors
-POST                   /admin/v1/authors            invite/provision an author
 GET                    /public/v1/categories/:slug/articles
 GET                    /public/v1/preview/:id
 ```

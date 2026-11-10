@@ -1,0 +1,10 @@
+meta { name: Refusal — onboard into a non-existent site, type: http, seq: 5 }
+post { url: {{adminBase}}/platform/tenants/0198f000-0000-7000-8000-0000000000ff/authors, body: json, auth: none }
+headers { Cookie: {{sessionCookie}} }
+body:json {
+  { "username": "ghost", "name": "Ghost", "email": "ghost@example.com", "role": "admin" }
+}
+docs {
+  Expect 404, checked BEFORE anything is created. Otherwise an invite against a
+  bad id leaves a Kratos identity attached to a row nobody can reach.
+}

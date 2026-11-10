@@ -1,0 +1,10 @@
+meta { name: List sites, type: http, seq: 1 }
+get { url: {{adminBase}}/platform/tenants, body: none, auth: none }
+headers { Cookie: {{sessionCookie}} }
+docs {
+  Platform admins only — a site admin gets 403.
+
+  Deliberately unscoped: the caller has no tenant of their own and picking one
+  is the point. A separate shape from the dashboard's tenant summary, so future
+  dashboard metrics do not silently join this response.
+}

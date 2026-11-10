@@ -78,10 +78,24 @@ Deliver:
 |---|---|---|
 | A1 | What permission checks are built on | **A named-permission layer, Keto-ready.** Every action has a permission checked through a `PermissionChecker` port. The implementation reads `authors.role` — still ONE source of truth for roles. Keto replaces the adapter later; endpoints do not change. |
 | A2 | How an invited author gets in | **A one-time sign-up link shown to the admin to copy.** No email infrastructure; nobody ever handles a password. |
-| A3 | Who manages authors | **Site admins only**, for their own site. A new site's first admin is created with a **CLI task**. The platform admin does not manage authors. |
+| A3 | Who manages authors | ~~**Site admins only**, for their own site. A new site's first admin is created with a **CLI task**. The platform admin does not manage authors.~~ **REVISED 2026-11-10** — see below. |
 | A4 | Username changes | **Locked** after creation (login identifier and public `/author/:username`). |
 | A5 | Deactivated author's public presence | **Hidden**: their `/author/:username` page 404s and bylines render as plain text (no link, no end-of-article card). Articles stay published under their name. |
 | A6 | "My profile" page | **Deferred** — not in this round. |
+
+**A3 revised, 2026-11-10.** Site admins still manage their own site, and still
+invite, edit and deactivate. **Platform admins may now also onboard, into any
+site** — list and invite only. This replaces Slice 9's CLI task, which was never
+built: bootstrapping a site's first admin from a terminal is a poor product
+answer when an operator UI already exists.
+
+It is a second controller (`/admin/v1/platform/...`, `@PlatformAdminOnly`), not
+an optional `tenantId` on the existing endpoint, so §3.3's "the site comes from
+the SESSION, never the body" stays literally true for site admins and an author
+principal cannot reach the tenant-from-path route at all. The use case is
+shared — `inviteAuthor` always took `tenantId` as a parameter.
+
+Slice 9 is therefore **superseded, not pending**.
 
 ### 2.2 Decided by the design (from the codebase; not user questions)
 

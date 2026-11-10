@@ -10,7 +10,8 @@ const { data: me } = await useMe()
  * file is exactly where someone would be tempted to believe otherwise.
  *
  * A platform admin has no tenant, so none of these apply to them at all: the
- * API would 403 every one. They get no tabs rather than tabs that fail.
+ * API would 403 every one. They get PLATFORM_NAV instead — tabs that work for
+ * a principal with no site, rather than tenant tabs that would fail.
  */
 const TENANT_NAV: {
   to: string
@@ -26,11 +27,22 @@ const TENANT_NAV: {
   { to: '/authors', label: 'Authors', icon: 'author', minimum: 'admin' },
 ]
 
+/**
+ * The operator's tabs. Only Authors today: onboarding into any site is the one
+ * cross-tenant action they have (root CLAUDE.md §5, revised 2026-11-10). They
+ * still see no tenant content — the page lists people, never articles.
+ */
+const PLATFORM_NAV: { to: string, label: string, icon: IconName, exact?: boolean }[] = [
+  { to: '/', label: 'Sites', icon: 'dashboard', exact: true },
+  { to: '/authors', label: 'Authors', icon: 'author' },
+]
+
 const ACTIVE_TAB = '!border-accent !text-fg font-medium'
 
 const RANK: Record<AuthorRole, number> = { contributor: 1, editor: 2, admin: 3 }
 
 const nav = computed(() => {
+  if (me.value?.kind === 'platform-admin') return PLATFORM_NAV
   if (me.value?.kind !== 'author' || !me.value.role) return []
   const role = me.value.role
   return TENANT_NAV.filter(item => RANK[role] >= RANK[item.minimum])

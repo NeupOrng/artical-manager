@@ -29,9 +29,80 @@ export interface Me {
   tenantName: string | null
   /** Present for tenant authors; null for platform admins. */
   role: AuthorRole | null
+  /**
+   * What this principal may do. Empty for a platform admin, who holds no
+   * tenant permissions at all (root CLAUDE.md §5) — their surface is gated by
+   * `kind`, not by this list.
+   */
+  permissions: Permission[]
 }
 
 export type AuthorRole = 'admin' | 'editor' | 'contributor'
+
+/**
+ * Named permissions, as `/me` reports them.
+ *
+ * The UI hides controls by PERMISSION, never by role — the role ladder is an
+ * implementation detail the API owns and Keto will eventually replace
+ * (core-engine/libs/author/src/domain/permissions.ts). Gating on a role here
+ * would be a second copy of that ladder, and the copy drifts.
+ */
+export type Permission =
+  | 'dashboard.read'
+  | 'articles.read' | 'articles.write' | 'articles.publish' | 'articles.delete'
+  | 'categories.read' | 'categories.manage'
+  | 'media.read' | 'media.upload' | 'media.delete'
+  | 'authors.read' | 'authors.invite' | 'authors.update' | 'authors.deactivate'
+
+/** Derived by the API from two timestamps; never stored. */
+export type AuthorStatus = 'active' | 'invited' | 'deactivated'
+
+export interface Author {
+  id: string
+  /** The login identifier AND the public /author/:username segment. Fixed. */
+  username: string | null
+  name: string
+  /** Contact address. Not a credential. */
+  email: string
+  role: AuthorRole
+  status: AuthorStatus
+  lastSeenAt: string | null
+  deactivatedAt: string | null
+  contactPublic: boolean
+  publishedCount: number
+  draftCount: number
+}
+
+export interface AuthorList { data: Author[] }
+
+export interface InviteAuthorInput {
+  username: string
+  name: string
+  email: string
+  role: AuthorRole
+}
+
+/** Shown ONCE and never stored — there is no way to retrieve it again. */
+export interface InviteLink { link: string, expiresAt: string }
+
+export interface InvitedAuthor { author: Author, invite: InviteLink }
+
+export interface AuthorPatch {
+  name?: string
+  email?: string
+  role?: AuthorRole
+}
+
+/** A site, for the platform operator choosing one. */
+export interface PlatformTenant {
+  id: string
+  name: string
+  domain: string
+  nicheLabel: string
+  authorCount: number
+}
+
+export interface PlatformTenantList { data: PlatformTenant[] }
 
 export type ArticleStatus = 'draft' | 'published'
 

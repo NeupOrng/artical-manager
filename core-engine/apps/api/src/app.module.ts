@@ -13,6 +13,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ArticlesModule } from './modules/articles/articles.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { AuthorsModule } from './modules/authors/authors.module';
+import { PlatformModule } from './modules/platform/platform.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { AuthorsModule } from './modules/authors/authors.module';
     ArticlesModule,
     CategoriesModule,
     AuthorsModule,
+    PlatformModule,
     // Still to come: TenantsModule.
     // See core-engine/CLAUDE.md.
   ],

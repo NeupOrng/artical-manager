@@ -103,7 +103,7 @@ app/
     articles/     list + editor, publish/unpublish, delete
     categories/   tenant taxonomy: create, edit, reorder, retire, restore
     media/        library                                      — not built
-    authors/      admin/editor only                            — not built
+    authors/      who has access: invite, edit, withdraw, restore
   layouts/        default (nav + session), auth (bare)
   middleware/     auth.global.ts — cosmetic redirect, not a permission check
   composables/    useMe, useDashboard, useDashboardAnalytics, useArticles,
@@ -127,8 +127,8 @@ public/
 
 Login and the four Kratos flows, the dashboard, **articles end to end** —
 list, create, edit, publish/unpublish, delete — with a TipTap editor and real
-image uploads — **categories** and the **analytics dashboard** (below). Media
-library and author management are not built.
+image uploads — **categories**, **authors** (below) and the **analytics
+dashboard**. The media library is not built.
 
 ## Categories
 
@@ -150,6 +150,35 @@ The article editor's picker lists live categories only. An article filed under
 a since-retired one shows it as a disabled "(retired)" option, and the save
 sends `categoryId` **only when it changed** — re-sending a retired id used to
 make those articles unsaveable. Article counts link to `/articles?categoryId=`.
+
+## Authors
+
+`/authors` serves **two principals from one page**, branching on `kind` — never
+assuming a tenant:
+
+- a site **admin** manages their own site: invite, re-issue an unaccepted link,
+  change name / email / role, withdraw and restore access.
+- a **platform admin** picks a site and may only *onboard* into it. Editing and
+  withdrawing belong to the site's own admins (A3), so those controls are
+  **absent rather than disabled** — a disabled button implies a permission you
+  could be granted.
+
+Things worth keeping:
+
+- **Controls are hidden by PERMISSION, not role.** `/me` returns a
+  `permissions` array for exactly this; gating on role here would be a second
+  copy of the role ladder, and the copy drifts. Still cosmetic — the API refuses
+  regardless.
+- **The invite link is shown once** and gets its own panel, not a toast. The API
+  cannot reproduce it and nothing caches it; a toast that auto-dismisses loses
+  it. Re-issue is the recovery, and only while the invite is unaccepted.
+- **Status is the API's derivation** (`active` / `invited` / `deactivated`) from
+  two timestamps. Do not recompute it here.
+- `AuthorStatusPill` is deliberately separate from `StatusPill`: that one is
+  typed to `ArticleStatus` and means "can the public see this". One component
+  for both would make every future article status a valid author status.
+- Error codes land on the field they are about (`USERNAME_TAKEN` → the username
+  field). Map codes, never parse messages.
 
 ## Dashboard
 
@@ -216,8 +245,9 @@ assume a tenant:
 - **author** — has `tenantId` and `role`. Sees their site's article counts, their
   own counts, media count, and recently edited articles.
 - **platform-admin** — has neither, by design. Sees the list of sites with
-  **aggregate counts only**, never article titles. They manage sites and authors;
-  they have no access to any tenant's content. See
+  **aggregate counts only**, never article titles, and can onboard an author
+  into any site from `/authors`. They manage sites and people; they have no
+  access to any tenant's content. See
   `../core-engine/libs/database/src/schema/platform-admins.ts`.
 
 Do not "fix" the platform view by adding titles to it. That is root `CLAUDE.md`
@@ -299,8 +329,11 @@ is worse than a missing one, because it will be trusted.
 - Role-based UI hiding is **cosmetic**. The API enforces roles; hiding a button is
   not a permission check.
 - No secrets in `public` runtime config — anything sensitive is server-only.
-- Tenancy is never chosen in the UI. An author belongs to exactly one tenant,
-  resolved server-side from their identity.
+- Tenancy is never chosen in the UI — for **authors**, who belong to exactly one
+  tenant, resolved server-side from their identity. The single exception is the
+  platform operator on `/authors`: they have no tenant at all, so naming one is
+  the whole job. It comes from a list the API gave them, never typed, and the
+  API refuses an author principal on that route regardless (2026-11-10).
 - **`NUXT_API_BASE_URL` points at the gateway, never at the API.** Requests must
   pass through Kong and Oathkeeper to have an identity attached.
 - **Render Kratos `ui.nodes` faithfully.** Filtering the node list to "the fields

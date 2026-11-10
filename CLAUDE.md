@@ -183,8 +183,17 @@ nothing, so the failure is a super admin silently seeing an **empty list** rathe
 than an error. `Principal` is a discriminated union for the same reason: reading
 `.tenantId` off a platform admin does not compile.
 
-A platform admin therefore has no access to any tenant's content. That is not a
-gap to fill later with an `if` — it is the isolation rule in §1 holding.
+A platform admin therefore has no access to any tenant's **content**. That is not
+a gap to fill later with an `if` — it is the isolation rule in §1 holding.
+
+**Revised 2026-11-10 — they may onboard authors into any site.** One
+cross-tenant action, on its own surface (`/admin/v1/platform/...`, guarded by
+`@PlatformAdminOnly`), because a new site's first admin has to come from
+somewhere and a CLI task is a poor answer for a product. It does not weaken the
+rule above: the operator sees *people*, never articles, and the site-admin
+endpoint keeps taking its tenant from the session. A separate controller rather
+than an optional `tenantId` is what keeps both statements literally true — see
+§9 and `core-engine/docs/api-reference.md`.
 
 ---
 
@@ -317,17 +326,22 @@ Do not implement these without asking.
 
 ### Decided, previously open
 
-- **Authors management + a Keto-ready permission layer — decided 2026-09-14, NOT
-  built.** Site admins (only) invite authors by a one-time sign-up link shown to
+- **Authors management + a Keto-ready permission layer — decided 2026-09-14,
+  built 2026-11-10.** Site admins invite authors by a one-time sign-up link shown to
   copy, edit name / email / role, and deactivate or reactivate them; a new site's
   first admin comes from a CLI task. Usernames are locked after creation. A
   deactivated author cannot sign in, the API refuses them, their public page
   404s and bylines render unlinked; their articles stay. Every protected action
-  becomes a named permission checked through one port — answered from
-  `authors.role` today, so roles still live in ONE place; Keto replaces that one
-  adapter later (§5 is unchanged until then). "My profile" is deferred. Open:
-  site cache revalidation (see the proposal §2.3). Full plan:
-  `docs/proposals/authors-management.md`.
+  is a named permission checked through one port — answered from `authors.role`
+  today, so roles still live in ONE place; Keto replaces that one adapter later.
+  "My profile" is deferred. Open: site cache revalidation (proposal §2.3).
+
+  **A3 revised 2026-11-10: platform admins may also onboard, into any site.**
+  The CLI task it replaced (Slice 9) was never built. They get list-and-invite
+  only — editing and deactivating stay with the site's own admins — on a
+  separate `/admin/v1/platform/...` surface, so the site-admin endpoint keeps
+  taking its tenant from the session. See §5.
+  Full plan: `docs/proposals/authors-management.md`.
 - **Readership analytics via Umami — decided 2026-09-12, built 2026-09-13.** Umami
   (self-hosted, MIT, on the existing Postgres in its own `umami` database, no
   public surface) computes readership for the backoffice dashboard. Views are

@@ -1,0 +1,8 @@
+meta { name: Refusal — a site admin on the platform surface, type: http, seq: 4 }
+get { url: {{adminBase}}/platform/tenants, body: none, auth: none }
+headers { Cookie: {{siteAdminSessionCookie}} }
+docs {
+  Expect 403. @PlatformAdminOnly refuses an author principal before any handler
+  runs — this is what lets the site-admin endpoint keep "the tenant comes from
+  the session, never the body" literally true.
+}
